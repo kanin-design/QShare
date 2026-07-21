@@ -1,0 +1,13 @@
+# Swift / SPM
+App/.build/
+.build/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+.DS_Store
+
+# Built .app bundle
+App/build/
+
+# Claude Code local settings
+.claude/settings.local.json
