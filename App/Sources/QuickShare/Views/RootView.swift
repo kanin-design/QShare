@@ -59,7 +59,7 @@ struct RootView: View {
         HStack(spacing: Theme.Space.md) {
             BrandMark()
             VStack(alignment: .leading, spacing: 0) {
-                Text("QuickShare").font(.title2.weight(.semibold))
+                Text("QShare").font(.title2.weight(.semibold))
                 Text("Share with nearby Android devices")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -67,7 +67,8 @@ struct RootView: View {
             Spacer()
         }
         .padding(.horizontal, Theme.Space.lg)
-        .padding(.vertical, Theme.Space.md)
+        .padding(.top, Theme.Space.xl)      // clear the window traffic-light buttons
+        .padding(.bottom, Theme.Space.md)
     }
 
     private var modePicker: some View {

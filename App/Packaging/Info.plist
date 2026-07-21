@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>QuickShare</string>
+    <string>QShare</string>
     <key>CFBundleDisplayName</key>
-    <string>QuickShare</string>
+    <string>QShare</string>
     <key>CFBundleIdentifier</key>
-    <string>com.stian.quickshare2</string>
+    <string>com.stian.qshare</string>
     <key>CFBundleExecutable</key>
-    <string>QuickShare</string>
+    <string>QShare</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIconName</key>
@@ -27,7 +27,7 @@
 
     <!-- Quick Share transfers happen over the local network via Bonjour/mDNS. -->
     <key>NSLocalNetworkUsageDescription</key>
-    <string>QuickShare uses the local network to find and transfer files with nearby Android devices.</string>
+    <string>QShare uses the local network to find and transfer files with nearby Android devices.</string>
     <key>NSBonjourServices</key>
     <array>
         <string>_FC9F5ED42C8A._tcp</string>

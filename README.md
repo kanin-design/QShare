@@ -1,4 +1,4 @@
-# QuickShare2
+# QShare
 
 A native macOS app for **Quick Share** (Google's Nearby Share) — send and receive
 files to/from nearby Android devices over Wi-Fi LAN.

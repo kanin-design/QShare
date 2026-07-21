@@ -1,18 +1,15 @@
 import SwiftUI
+import AppKit
 
-/// The app's logo mark — a rounded gradient tile with the share glyph.
+/// The app's logo mark — renders the actual app icon (from AppIcon.icns), so
+/// updating the .icns updates every logo in the UI automatically.
 struct BrandMark: View {
     var size: CGFloat = 28
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            .fill(Theme.brandGradient)
+        Image(nsImage: NSApplication.shared.applicationIconImage)
+            .resizable()
+            .interpolation(.high)
             .frame(width: size, height: size)
-            .overlay(
-                Image(systemName: "dot.radiowaves.up.forward")
-                    .font(.system(size: size * 0.5, weight: .bold))
-                    .foregroundStyle(.white)
-            )
-            .shadow(color: Theme.accent.opacity(0.3), radius: size * 0.16, y: 1)
     }
 }
 

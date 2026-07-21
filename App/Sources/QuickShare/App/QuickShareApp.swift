@@ -7,7 +7,7 @@ struct QuickShareApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("QuickShare", id: "main") {
+        WindowGroup("QShare", id: "main") {
             RootView()
                 .environmentObject(model)
                 .frame(minWidth: 440, idealWidth: 460, maxWidth: 560,

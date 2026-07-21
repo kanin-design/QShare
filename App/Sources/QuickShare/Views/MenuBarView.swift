@@ -24,11 +24,11 @@ struct MenuBarView: View {
         }
 
         Divider()
-        Button("Open QuickShare") {
+        Button("Open QShare") {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
-        Button("Quit QuickShare") { NSApp.terminate(nil) }
+        Button("Quit QShare") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 }
