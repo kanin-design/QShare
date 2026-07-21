@@ -26,6 +26,7 @@ struct SectionHeader: View {
             Spacer()
             trailing
         }
+        .frame(minHeight: 18)   // fixed height so tabs share identical top geometry
     }
 }
 

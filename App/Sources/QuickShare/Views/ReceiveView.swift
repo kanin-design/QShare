@@ -7,7 +7,10 @@ struct ReceiveView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.lg) {
+        VStack(alignment: .leading, spacing: Theme.Space.md) {
+            // Mirrors Send's "NEARBY DEVICES" slot so content lands at the same Y.
+            SectionHeader(title: "Visibility", trailing: AnyView(statusAccessory))
+
             visibilityCard
 
             if model.isVisible {
@@ -17,6 +20,16 @@ struct ReceiveView: View {
             if !model.trustedDevices.isEmpty {
                 trustedDevices
             }
+        }
+    }
+
+    private var statusAccessory: some View {
+        HStack(spacing: 4) {
+            Circle().fill(model.isVisible ? Theme.success : Color.secondary)
+                .frame(width: 7, height: 7)
+            Text(model.isVisible ? "On" : "Off")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 

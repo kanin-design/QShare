@@ -30,6 +30,7 @@ struct RootView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
         .animation(.easeInOut(duration: 0.2), value: model.connection)
@@ -54,14 +55,13 @@ struct RootView: View {
             })
     }
 
-    // Slim title on the traffic-light row: a hint of white, 100% centered, no divider.
+    // Slim title on the traffic-light row: 100% centered, vertically aligned with
+    // the traffic-light buttons (28pt band), no divider.
     private var header: some View {
         Text("QShare")
             .font(.system(size: 13, weight: .light))
-            .foregroundStyle(.primary.opacity(0.55))
-            .frame(maxWidth: .infinity)
-            .padding(.top, 9)
-            .padding(.bottom, 7)
+            .foregroundStyle(.primary.opacity(0.9))
+            .frame(maxWidth: .infinity, minHeight: 28)
     }
 
     private var modePicker: some View {
