@@ -56,30 +56,21 @@ struct RootView: View {
     }
 
     private var header: some View {
-        HStack(spacing: Theme.Space.md) {
-            BrandMark()
-            VStack(alignment: .leading, spacing: 0) {
-                Text("QShare").font(.title2.weight(.semibold))
-                Text("Share with nearby Android devices")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        VStack(alignment: .leading, spacing: 2) {
+            Text("QShare")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+            Text("Share with nearby Android devices")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Theme.Space.lg)
-        .padding(.top, Theme.Space.xl)      // clear the window traffic-light buttons
-        .padding(.bottom, Theme.Space.md)
+        .padding(.top, 26)                 // clear the window traffic-light buttons
+        .padding(.bottom, Theme.Space.sm)
     }
 
     private var modePicker: some View {
-        Picker("Mode", selection: $model.mode) {
-            ForEach(AppMode.allCases) { mode in
-                Text(mode.rawValue).tag(mode)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.large)
+        ModeToggle(selection: $model.mode)
     }
 
     private var transfersSection: some View {
@@ -94,5 +85,47 @@ struct RootView: View {
                 TransferRow(transfer: transfer) { model.cancel(transfer) }
             }
         }
+    }
+}
+
+/// Custom Send/Receive control: a rounded track with a smooth sliding glass pill
+/// under the selected segment (Liquid-Glass material, spring-animated).
+struct ModeToggle: View {
+    @Binding var selection: AppMode
+    @Namespace private var ns
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(AppMode.allCases) { mode in
+                let isOn = selection == mode
+                Text(mode.rawValue)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(isOn ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background {
+                        if isOn {
+                            Capsule(style: .continuous)
+                                .fill(.regularMaterial)
+                                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.35), lineWidth: 0.5))
+                                .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+                                .matchedGeometryEffect(id: "pill", in: ns)
+                        }
+                    }
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                            selection = mode
+                        }
+                    }
+            }
+        }
+        .padding(4)
+        .background(
+            Capsule(style: .continuous).fill(Color.primary.opacity(0.06))
+        )
+        .overlay(
+            Capsule(style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        )
     }
 }
