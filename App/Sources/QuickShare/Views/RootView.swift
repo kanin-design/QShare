@@ -9,7 +9,6 @@ struct RootView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().opacity(0.4)
 
             VStack(alignment: .leading, spacing: Theme.Space.lg) {
                 modePicker
@@ -55,18 +54,14 @@ struct RootView: View {
             })
     }
 
+    // Slim title on the traffic-light row: a hint of white, 100% centered, no divider.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("QShare")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-            Text("Share with nearby Android devices")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Theme.Space.lg)
-        .padding(.top, 26)                 // clear the window traffic-light buttons
-        .padding(.bottom, Theme.Space.sm)
+        Text("QShare")
+            .font(.system(size: 13, weight: .light))
+            .foregroundStyle(.primary.opacity(0.55))
+            .frame(maxWidth: .infinity)
+            .padding(.top, 9)
+            .padding(.bottom, 7)
     }
 
     private var modePicker: some View {
