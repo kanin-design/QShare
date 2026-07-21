@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import AppKit
 
 enum AppMode: String, CaseIterable, Identifiable {
     case send = "Send"
@@ -52,6 +53,10 @@ final class AppModel: ObservableObject {
     // Both
     @Published var transfers: [ActiveTransfer] = []
 
+    /// Device names the user chose to auto-accept from (persisted).
+    @Published var trustedDevices: [String] = []
+    private let trustKey = "trustedDeviceNames"
+
     private let service: QuickShareService
 
     init(service: QuickShareService? = nil) {
@@ -63,7 +68,34 @@ final class AppModel: ObservableObject {
         } else {
             self.service = NearbyQuickShareService()
         }
+        self.trustedDevices = UserDefaults.standard.stringArray(forKey: trustKey) ?? []
         self.service.delegate = self
+    }
+
+    /// Menu-bar glyph reflecting the current state.
+    var menuBarSymbol: String {
+        if incomingRequest != nil { return "arrow.down.circle.fill" }
+        if transfers.contains(where: { $0.phase == .transferring }) { return "arrow.up.arrow.down.circle.fill" }
+        return isVisible ? "arrow.2.circlepath.circle.fill" : "arrow.2.circlepath"
+    }
+
+    // MARK: Trusted devices
+
+    func isTrusted(_ name: String) -> Bool { trustedDevices.contains(name) }
+
+    func trust(_ name: String) {
+        guard !isTrusted(name) else { return }
+        trustedDevices.append(name)
+        persistTrust()
+    }
+
+    func untrust(_ name: String) {
+        trustedDevices.removeAll { $0 == name }
+        persistTrust()
+    }
+
+    private func persistTrust() {
+        UserDefaults.standard.set(trustedDevices, forKey: trustKey)
     }
 
     // MARK: Intents — Receive
@@ -72,17 +104,26 @@ final class AppModel: ObservableObject {
         isVisible ? service.stopAdvertising() : service.startAdvertising(deviceName: deviceName)
     }
 
-    func respondToIncoming(accept: Bool) {
+    func respondToIncoming(accept: Bool, trustDevice: Bool = false) {
         guard let req = incomingRequest else { return }
-        service.respondToIncoming(id: req.id, accept: accept)
         if accept {
-            transfers.insert(
-                ActiveTransfer(id: req.id, direction: .incoming, deviceName: req.device.name,
-                               title: req.summary, totalBytes: req.totalBytes, phase: .transferring,
-                               files: req.fileNames.map { TransferFile(name: $0) }),
-                at: 0)
+            if trustDevice { trust(req.device.name) }
+            acceptIncoming(req)
+        } else {
+            service.respondToIncoming(id: req.id, accept: false)
         }
         incomingRequest = nil
+    }
+
+    /// Accept a request and create its transfer row (shared by manual and
+    /// trusted-device auto-accept).
+    private func acceptIncoming(_ req: IncomingRequest) {
+        service.respondToIncoming(id: req.id, accept: true)
+        transfers.insert(
+            ActiveTransfer(id: req.id, direction: .incoming, deviceName: req.device.name,
+                           title: req.summary, totalBytes: req.totalBytes, phase: .transferring,
+                           files: req.fileNames.map { TransferFile(name: $0) }),
+            at: 0)
     }
 
     // MARK: Intents — Send
@@ -170,7 +211,12 @@ extension AppModel: QuickShareServiceDelegate {
     }
 
     func serviceDidReceiveIncomingRequest(_ request: IncomingRequest) {
-        incomingRequest = request
+        if isTrusted(request.device.name) {
+            acceptIncoming(request)   // remembered device → accept automatically
+        } else {
+            incomingRequest = request
+            NSApp.activate(ignoringOtherApps: true)   // surface the prompt
+        }
     }
 
     func serviceDidDiscover(_ device: RemoteDevice) {

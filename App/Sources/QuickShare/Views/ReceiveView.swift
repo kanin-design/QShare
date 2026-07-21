@@ -13,6 +13,38 @@ struct ReceiveView: View {
             if model.isVisible {
                 instructions
             }
+
+            if !model.trustedDevices.isEmpty {
+                trustedDevices
+            }
+        }
+    }
+
+    private var trustedDevices: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                Text("Trusted devices")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text("Files from these devices are accepted automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                ForEach(model.trustedDevices, id: \.self) { name in
+                    HStack(spacing: Theme.Space.sm) {
+                        Image(systemName: "checkmark.shield.fill").foregroundStyle(Theme.success)
+                        Text(name).font(.callout)
+                        Spacer()
+                        Button {
+                            model.untrust(name)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Remove \(name) from trusted devices")
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
         }
     }
 

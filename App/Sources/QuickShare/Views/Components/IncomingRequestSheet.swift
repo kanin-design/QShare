@@ -4,8 +4,10 @@ import SwiftUI
 /// app root, so it appears over either tab — an incoming request is never hidden.
 struct IncomingRequestSheet: View {
     let request: IncomingRequest
-    let onAccept: () -> Void
+    let onAccept: (_ trustDevice: Bool) -> Void
     let onDecline: () -> Void
+
+    @State private var alwaysAllow = false
 
     var body: some View {
         VStack(spacing: Theme.Space.lg) {
@@ -28,12 +30,18 @@ struct IncomingRequestSheet: View {
 
             PinBadge(pin: request.pin)
 
+            Toggle(isOn: $alwaysAllow) {
+                Text("Always accept from \(request.device.name)")
+                    .font(.callout)
+            }
+            .toggleStyle(.checkbox)
+
             HStack(spacing: Theme.Space.md) {
                 Button("Decline", role: .cancel, action: onDecline)
                     .controlSize(.large)
                     .keyboardShortcut(.cancelAction)
 
-                Button(action: onAccept) {
+                Button(action: { onAccept(alwaysAllow) }) {
                     Text("Accept").frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)

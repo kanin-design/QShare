@@ -7,7 +7,7 @@ struct QuickShareApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("QuickShare") {
+        WindowGroup("QuickShare", id: "main") {
             RootView()
                 .environmentObject(model)
                 .frame(minWidth: 440, idealWidth: 460, maxWidth: 560,
@@ -15,6 +15,14 @@ struct QuickShareApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+
+        // Menu-bar presence: usable without the window in front.
+        MenuBarExtra {
+            MenuBarView().environmentObject(model)
+        } label: {
+            Image(systemName: model.menuBarSymbol)
+        }
+        .menuBarExtraStyle(.menu)
     }
 }
 
@@ -27,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        // Keep running in the menu bar when the window is closed.
+        false
     }
 }

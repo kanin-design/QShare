@@ -53,8 +53,13 @@ Requires macOS 14+ and a recent Swift toolchain (built with Swift 6.3 / Xcode 26
 - [x] Real engine wrapper (`NearbyQuickShareService`) — discovery, advertise,
       handshake, send, receive, in-app progress (incoming progress hook added)
 - [x] `.app` bundle with Bonjour + local-network Info.plist
-- [ ] End-to-end verification against a real Android device
-- [ ] Menu-bar presence + Finder share extension
+- [x] End-to-end verified against a real Android device (send + receive)
+- [x] Path-traversal hardening on incoming file names
+- [x] App icon (native squircle)
+- [x] Menu-bar presence (stays alive in the background)
+- [x] Remembered/trusted devices (auto-accept from chosen senders)
+- [ ] User notifications for incoming requests while the window is closed
+- [ ] Finder share extension (share sheet entry point)
 - [ ] Configurable receive location (currently ~/Downloads, like NearDrop)
-- [ ] Security hardening of the frame parser
+- [ ] Further frame-parser hardening / fuzzing
 ```

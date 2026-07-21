@@ -38,7 +38,7 @@ struct RootView: View {
             if let req = model.incomingRequest {
                 IncomingRequestSheet(
                     request: req,
-                    onAccept: { model.respondToIncoming(accept: true) },
+                    onAccept: { trust in model.respondToIncoming(accept: true, trustDevice: trust) },
                     onDecline: { model.respondToIncoming(accept: false) })
             }
         }
