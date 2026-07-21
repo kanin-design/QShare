@@ -20,6 +20,7 @@ rm -rf "$OUT"
 mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources"
 cp "$BIN" "$OUT/Contents/MacOS/QuickShare"
 cp "$HERE/Info.plist" "$OUT/Contents/Info.plist"
+cp "$HERE/AppIcon.icns" "$OUT/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$OUT/Contents/PkgInfo"
 
 # Ad-hoc codesign so the local-network TCC prompt has a stable identity.
