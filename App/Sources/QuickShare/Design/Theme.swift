@@ -63,6 +63,10 @@ extension View {
     func sectionStyle() -> some View {
         font(.system(size: 14, weight: .light)).foregroundStyle(.primary.opacity(0.9))
     }
+    /// The first line of every card — its headline. Identical across all cards.
+    func cardTitle() -> some View {
+        font(.system(size: 15, weight: .medium)).foregroundStyle(.primary)
+    }
     /// Main content text (device names, prompts, file names, steps).
     func primaryStyle() -> some View {
         font(.system(size: 13, weight: .regular)).foregroundStyle(.primary.opacity(0.9))

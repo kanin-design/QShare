@@ -27,24 +27,30 @@ struct ReceiveView: View {
     private var trustedDevices: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text("Trusted devices").secondaryStyle()
+                Text("Trusted devices").cardTitle()
                 Text("Files from these devices are accepted automatically.")
                     .secondaryStyle()
-                ForEach(model.trustedDevices, id: \.self) { name in
-                    HStack(spacing: Theme.Space.sm) {
-                        Image(systemName: "checkmark.shield.fill").foregroundStyle(Theme.success)
-                        Text(name).primaryStyle()
-                        Spacer()
-                        Button {
-                            model.untrust(name)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                ScrollView {
+                    VStack(spacing: Theme.Space.xs) {
+                        ForEach(model.trustedDevices, id: \.self) { name in
+                            HStack(spacing: Theme.Space.sm) {
+                                Image(systemName: "checkmark.shield.fill").foregroundStyle(Theme.success)
+                                Text(name).primaryStyle()
+                                Spacer()
+                                Button {
+                                    model.untrust(name)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Remove \(name) from trusted devices")
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Remove \(name) from trusted devices")
                     }
-                    .padding(.vertical, 2)
                 }
+                .scrollIndicators(.hidden)
+                .frame(maxHeight: 120)
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -53,7 +59,7 @@ struct ReceiveView: View {
         Card {
             HStack(spacing: Theme.Space.md) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(model.isVisible ? "Visible as" : "Not visible").primaryStyle()
+                    Text(model.isVisible ? "Visible as" : "Not visible").cardTitle()
                     Text(model.isVisible ? model.deviceName : "Turn on to receive files")
                         .secondaryStyle()
                 }
@@ -69,7 +75,7 @@ struct ReceiveView: View {
     private var instructions: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("On your Android device").secondaryStyle()
+                Text("On your Android device").cardTitle()
                 step(1, "Select a file and tap Share, then Quick Share.")
                 step(2, "Choose “\(model.deviceName)” from the list of nearby devices.")
                 step(3, "Confirm the PIN, and files land in [\(model.downloadDirectory.lastPathComponent)](qshare://folder).")
