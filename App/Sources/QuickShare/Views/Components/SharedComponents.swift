@@ -57,10 +57,11 @@ struct PulsingDot: View {
 struct GlassSwitch: View {
     @Binding var isOn: Bool
     var onColor: Color = Theme.success
+    var offColor: Color = Color(red: 0.85, green: 0.29, blue: 0.29)
 
     var body: some View {
         Capsule()
-            .fill(isOn ? AnyShapeStyle(onColor) : AnyShapeStyle(Color.primary.opacity(0.18)))
+            .fill(isOn ? AnyShapeStyle(onColor) : AnyShapeStyle(offColor))
             .frame(width: 40, height: 24)
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()

@@ -9,7 +9,7 @@ struct ReceiveView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
             // Mirrors Send's "NEARBY DEVICES" slot so content lands at the same Y.
-            SectionHeader(title: "Visibility", trailing: AnyView(statusAccessory))
+            SectionHeader(title: "Visibility")
 
             visibilityCard
 
@@ -20,16 +20,6 @@ struct ReceiveView: View {
             if !model.trustedDevices.isEmpty {
                 trustedDevices
             }
-        }
-    }
-
-    private var statusAccessory: some View {
-        HStack(spacing: 4) {
-            Circle().fill(model.isVisible ? Theme.success : Color.secondary)
-                .frame(width: 7, height: 7)
-            Text(model.isVisible ? "On" : "Off")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -65,11 +55,8 @@ struct ReceiveView: View {
         Card {
             HStack(spacing: Theme.Space.md) {
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: Theme.Space.sm) {
-                        if model.isVisible { PulsingDot() }
-                        Text(model.isVisible ? "Visible as" : "Not visible")
-                            .font(.system(size: 15))
-                    }
+                    Text(model.isVisible ? "Visible as" : "Not visible")
+                        .font(.system(size: 15))
                     Text(model.isVisible ? model.deviceName : "Turn on to receive files")
                         .font(.callout)
                         .foregroundStyle(.secondary)
