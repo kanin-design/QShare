@@ -58,23 +58,23 @@ enum Theme {
 
 // MARK: - Typography (the whole system — three styles, nothing else)
 
-// Apple type scale (SF Pro): Title 3 / Headline / Subhead / Footnote.
+// Type scale (SF Pro): 15 / 13 / 12 / 11, big → small.
 extension View {
-    /// Group header (Title 3, 20pt semibold) — the most prominent label.
+    /// Group header — most prominent.
     func sectionStyle() -> some View {
-        font(.system(size: 20, weight: .semibold)).foregroundStyle(.primary)
+        font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary)
     }
-    /// Card headline (Headline, 17pt semibold).
+    /// Card headline.
     func cardTitle() -> some View {
-        font(.system(size: 17, weight: .semibold)).foregroundStyle(.primary)
+        font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary)
     }
-    /// Body content (Subhead, 15pt regular).
+    /// Body content.
     func primaryStyle() -> some View {
-        font(.system(size: 15, weight: .regular)).foregroundStyle(.primary)
+        font(.system(size: 12, weight: .regular)).foregroundStyle(.primary)
     }
-    /// Muted subtext (Footnote, 13pt regular).
+    /// Muted subtext.
     func secondaryStyle() -> some View {
-        font(.system(size: 13, weight: .regular)).foregroundStyle(.secondary)
+        font(.system(size: 11, weight: .regular)).foregroundStyle(.secondary)
     }
 }
 
