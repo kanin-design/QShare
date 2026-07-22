@@ -58,23 +58,23 @@ enum Theme {
 
 // MARK: - Typography (the whole system — three styles, nothing else)
 
+// Apple type scale (SF Pro): Title 3 / Headline / Subhead / Footnote.
 extension View {
-    /// Quiet group label above a card (like macOS "Theme"): small, semibold, muted.
+    /// Group header (Title 3, 20pt semibold) — the most prominent label.
     func sectionStyle() -> some View {
-        font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
+        font(.system(size: 20, weight: .semibold)).foregroundStyle(.primary)
     }
-    /// The headline — biggest + heaviest (like macOS "Liquid Glass"). First line
-    /// of every card, and focal prompts.
+    /// Card headline (Headline, 17pt semibold).
     func cardTitle() -> some View {
-        font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary)
+        font(.system(size: 17, weight: .semibold)).foregroundStyle(.primary)
     }
-    /// Main content text (device names, file names, steps).
+    /// Body content (Subhead, 15pt regular).
     func primaryStyle() -> some View {
-        font(.system(size: 13, weight: .regular)).foregroundStyle(.primary)
+        font(.system(size: 15, weight: .regular)).foregroundStyle(.primary)
     }
-    /// The muted subtext — just smaller and quieter (like "Choose your…").
+    /// Muted subtext (Footnote, 13pt regular).
     func secondaryStyle() -> some View {
-        font(.system(size: 12, weight: .regular)).foregroundStyle(.secondary)
+        font(.system(size: 13, weight: .regular)).foregroundStyle(.secondary)
     }
 }
 
