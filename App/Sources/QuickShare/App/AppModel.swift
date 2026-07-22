@@ -214,6 +214,28 @@ final class AppModel: ObservableObject {
         guard case .staging(let device) = connection, !stagedFiles.isEmpty else { return }
         connection = .connecting(device)
         service.sendFiles(stagedFiles, to: device)
+        scheduleConnectTimeout(for: device)
+    }
+
+    private var connectToken = 0
+
+    /// If the handshake doesn't produce a PIN within a few seconds, the connect
+    /// failed (device moved on / unreachable). Don't hang — fail cleanly.
+    private func scheduleConnectTimeout(for device: RemoteDevice) {
+        connectToken += 1
+        let token = connectToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+            guard let self, token == self.connectToken,
+                  case .connecting(let d) = self.connection, d.id == device.id else { return }
+            self.service.cancelTransfer(id: device.id)
+            self.connection = .idle
+            self.stagedFiles = []
+            self.transfers.insert(
+                ActiveTransfer(id: "fail-\(UUID().uuidString.prefix(6))", direction: .outgoing,
+                               deviceName: device.name, title: "Couldn’t connect",
+                               totalBytes: 0, phase: .failed("No response — try again")),
+                at: 0)
+        }
     }
 
     // MARK: Intents — QR send
@@ -279,6 +301,7 @@ extension AppModel: QuickShareServiceDelegate {
         guard case .qrShowing = connection, !stagedFiles.isEmpty else { return }
         connection = .connecting(device)
         service.sendFiles(stagedFiles, to: device)
+        scheduleConnectTimeout(for: device)
     }
 
     func serviceDidEstablishConnection(with device: RemoteDevice, pin: String) {
