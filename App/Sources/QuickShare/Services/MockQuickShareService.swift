@@ -43,6 +43,8 @@ final class MockQuickShareService: QuickShareService {
         delegate?.serviceDidUpdateVisibility(isVisible: false)
     }
 
+    func setReceiveDirectory(_ url: URL) {}
+
     func respondToIncoming(id: String, accept: Bool) {
         guard accept else {
             delegate?.serviceDidFinishTransfer(id: id, error: nil)   // declined = clean close

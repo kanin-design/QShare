@@ -302,6 +302,15 @@ class InboundNearbyConnection: NearbyConnection{
 		currentState = .receivedPairedKeyResult
 	}
 	
+	// QuickShare2: the user-configured receive directory (falls back to ~/Downloads).
+	private func receiveDirectory() throws -> URL {
+		if let custom=NearbyConnectionManager.receiveDirectory {
+			try FileManager.default.createDirectory(at: custom, withIntermediateDirectories: true)
+			return custom.resolvingSymlinksInPath()
+		}
+		return (try FileManager.default.url(for: .downloadsDirectory, in: .userDomainMask, appropriateFor: nil, create: true)).resolvingSymlinksInPath()
+	}
+
 	// QuickShare2: reduce an untrusted, remote-supplied name to a safe single
 	// path component. Strips any directory parts and rejects traversal names.
 	static func sanitizeFileName(_ raw:String) -> String{
@@ -336,7 +345,7 @@ class InboundNearbyConnection: NearbyConnection{
 		guard frame.hasV1, frame.v1.hasIntroduction else { throw NearbyError.requiredFieldMissing("shareNearbyFrame.v1.introduction") }
 		currentState = .waitingForUserConsent
 		if frame.v1.introduction.fileMetadata.count>0 && frame.v1.introduction.textMetadata.isEmpty{
-			let downloadsDirectory=(try FileManager.default.url(for: .downloadsDirectory, in: .userDomainMask, appropriateFor: nil, create: true)).resolvingSymlinksInPath()
+			let downloadsDirectory=try receiveDirectory()
 			for file in frame.v1.introduction.fileMetadata{
 				// QuickShare2: the file name is attacker-controlled. Sanitize it to a
 				// single path component (defeats "../" traversal) and confine the
@@ -364,7 +373,7 @@ class InboundNearbyConnection: NearbyConnection{
 					self.delegate?.obtainUserConsent(for: metadata, from: self.remoteDeviceInfo!, connection: self)
 				}
 			}else if case .text=meta.type{
-				let downloadsDirectory=(try FileManager.default.url(for: .downloadsDirectory, in: .userDomainMask, appropriateFor: nil, create: true)).resolvingSymlinksInPath()
+				let downloadsDirectory=try receiveDirectory()
 				let dateFormatter=DateFormatter()
 				dateFormatter.dateFormat="yyyy-MM-dd HH.mm.ss"
 				let dest=makeFileDestinationURL(downloadsDirectory.appendingPathComponent("\(dateFormatter.string(from: Date())).txt"))

@@ -53,6 +53,10 @@ extension NearbyQuickShareService: QuickShareService {
         manager.submitUserConsent(transferID: id, accept: accept)
     }
 
+    func setReceiveDirectory(_ url: URL) {
+        NearbyConnectionManager.receiveDirectory = url
+    }
+
     // Send side
     func startDiscovery() {
         manager.startDeviceDiscovery()

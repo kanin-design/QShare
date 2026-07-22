@@ -23,6 +23,10 @@ struct QuickShareApp: App {
             Image(systemName: model.menuBarSymbol)
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            SettingsView().environmentObject(model)
+        }
     }
 }
 
@@ -30,12 +34,13 @@ struct QuickShareApp: App {
 /// `swift run` (no bundle). Harmless when run from a proper .app.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
+        NSApp.setActivationPolicy(.regular)   // show the window + Dock icon on launch
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Keep running in the menu bar when the window is closed.
-        false
+        // Closing the window drops the app to a menu-bar-only agent (no Dock icon).
+        NSApp.setActivationPolicy(.accessory)
+        return false
     }
 }

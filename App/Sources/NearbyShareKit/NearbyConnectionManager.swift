@@ -214,6 +214,9 @@ public class NearbyConnectionManager : NSObject, NetServiceDelegate, InboundNear
 	private var qrCodeData:Data?
 	
 	public static let shared=NearbyConnectionManager()
+
+	// QuickShare2 addition — where received files are saved (nil → ~/Downloads).
+	public static var receiveDirectory:URL?
 	
 	override init() {
 		tcpListener=try! NWListener(using: NWParameters(tls: .none))

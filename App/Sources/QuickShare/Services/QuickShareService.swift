@@ -22,6 +22,9 @@ protocol QuickShareService: AnyObject {
     /// Answer an `incomingTransferRequest` after the user chose.
     func respondToIncoming(id: String, accept: Bool)
 
+    /// Where received files should be saved.
+    func setReceiveDirectory(_ url: URL)
+
     // MARK: Send side (this Mac is the sender/client)
 
     /// Browse for nearby receivers.

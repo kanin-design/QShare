@@ -57,6 +57,12 @@ final class AppModel: ObservableObject {
     @Published var trustedDevices: [String] = []
     private let trustKey = "trustedDeviceNames"
 
+    // Settings (persisted)
+    @Published var downloadDirectory: URL = AppModel.defaultDownloadDirectory()
+    @Published var startVisible: Bool = false
+    private let downloadDirKey = "downloadDirectoryPath"
+    private let startVisibleKey = "startVisible"
+
     private let service: QuickShareService
 
     init(service: QuickShareService? = nil) {
@@ -69,7 +75,31 @@ final class AppModel: ObservableObject {
             self.service = NearbyQuickShareService()
         }
         self.trustedDevices = UserDefaults.standard.stringArray(forKey: trustKey) ?? []
+        if let path = UserDefaults.standard.string(forKey: downloadDirKey) {
+            self.downloadDirectory = URL(fileURLWithPath: path)
+        }
+        self.startVisible = UserDefaults.standard.bool(forKey: startVisibleKey)
         self.service.delegate = self
+        self.service.setReceiveDirectory(downloadDirectory)
+        if startVisible { self.service.startAdvertising(deviceName: deviceName) }
+    }
+
+    // MARK: Settings
+
+    func setDownloadDirectory(_ url: URL) {
+        downloadDirectory = url
+        UserDefaults.standard.set(url.path, forKey: downloadDirKey)
+        service.setReceiveDirectory(url)
+    }
+
+    func setStartVisible(_ on: Bool) {
+        startVisible = on
+        UserDefaults.standard.set(on, forKey: startVisibleKey)
+    }
+
+    private static func defaultDownloadDirectory() -> URL {
+        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Downloads")
     }
 
     /// Menu-bar glyph reflecting the current state.

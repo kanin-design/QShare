@@ -25,9 +25,12 @@ struct MenuBarView: View {
 
         Divider()
         Button("Open QShare") {
+            NSApp.setActivationPolicy(.regular)   // restore Dock icon while the window is up
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
+        SettingsLink { Text("Settings…") }
+            .keyboardShortcut(",")
         Button("Quit QShare") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
