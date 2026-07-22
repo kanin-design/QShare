@@ -24,7 +24,9 @@ struct SectionHeader: View {
             trailing
         }
         .frame(minHeight: 22)   // fixed height so tabs share identical top geometry
-        .padding(.horizontal, 2)
+        // Align the header with the card's *content*, not its outer edge — the
+        // card extends further left (macOS grouped-list convention).
+        .padding(.horizontal, Theme.Space.lg)
     }
 }
 

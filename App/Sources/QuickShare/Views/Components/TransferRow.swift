@@ -53,7 +53,7 @@ struct TransferRow: View {
 
             trailingControl
         }
-        .padding(Theme.Space.md)
+        .padding(Theme.Space.lg)
         .contentShape(Rectangle())
         .onTapGesture(perform: primaryAction)
         .help(primaryHelp)
