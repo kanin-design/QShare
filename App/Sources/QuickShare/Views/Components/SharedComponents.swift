@@ -51,6 +51,32 @@ struct PulsingDot: View {
     }
 }
 
+/// A pure-SwiftUI on/off switch. Unlike the AppKit-backed `Toggle` hosted inside
+/// a translucent material (which repaints in layers), this composites in a single
+/// pass so it never flickers.
+struct GlassSwitch: View {
+    @Binding var isOn: Bool
+    var onColor: Color = Theme.success
+
+    var body: some View {
+        Capsule()
+            .fill(isOn ? AnyShapeStyle(onColor) : AnyShapeStyle(Color.primary.opacity(0.18)))
+            .frame(width: 40, height: 24)
+            .overlay(alignment: isOn ? .trailing : .leading) {
+                Circle()
+                    .fill(.white)
+                    .padding(2)
+                    .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
+            }
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isOn)
+            .contentShape(Capsule())
+            .onTapGesture { isOn.toggle() }
+            .accessibilityElement()
+            .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+            .accessibilityLabel("Visible to nearby devices")
+    }
+}
+
 /// The verification PIN, shown large so the user can match it to the other device.
 struct PinBadge: View {
     let pin: String

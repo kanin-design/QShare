@@ -75,13 +75,10 @@ struct ReceiveView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Toggle("", isOn: Binding(
+                GlassSwitch(isOn: Binding(
                     get: { model.isVisible },
                     set: { _ in model.toggleVisibility() }
                 ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.large)
             }
         }
     }

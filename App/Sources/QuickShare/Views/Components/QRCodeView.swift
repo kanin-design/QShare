@@ -56,10 +56,13 @@ struct QRCodeView: View {
                 let dr = CGFloat(r) + 0.5 - center
                 let dc = CGFloat(c) + 0.5 - center
                 if (dr * dr + dc * dc).squareRoot() < clearRadius { continue }
-                let d = m * 0.82
+                // Near-solid rounded squares: reads like a normal QR (better
+                // scanner reliability) but keeps a soft, modern look.
+                let d = m * 0.96
                 let rect = CGRect(x: CGFloat(c) * m + (m - d) / 2,
                                   y: CGFloat(r) * m + (m - d) / 2, width: d, height: d)
-                ctx.fill(Path(ellipseIn: rect), with: shading)
+                ctx.fill(Path(roundedRect: rect, cornerSize: CGSize(width: m * 0.24, height: m * 0.24)),
+                         with: shading)
             }
         }
 
