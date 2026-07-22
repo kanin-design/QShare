@@ -53,7 +53,7 @@ struct SendView: View {
             } label: {
                 HStack(spacing: Theme.Space.md) {
                     Image(systemName: "qrcode").foregroundStyle(Theme.accent).frame(width: 28)
-                    Text("Don’t see your device? Use a QR code").font(.system(size: 13))
+                    Text("Don’t see your device? Use a QR code").primaryStyle()
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold)).foregroundStyle(.tertiary)
@@ -75,11 +75,9 @@ struct SendView: View {
                 .foregroundStyle(Theme.accent)
                 .symbolEffect(.variableColor.iterative, options: .repeating)
             Text("Looking for devices…")
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
+                .sectionStyle()
             Text("Open Quick Share on your Android device and set it to be visible.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .secondaryStyle()
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -128,9 +126,9 @@ struct SendView: View {
                 ForEach(model.stagedFiles) { file in
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: "doc.fill").foregroundStyle(.secondary)
-                        Text(file.name).font(.callout).lineLimit(1)
+                        Text(file.name).primaryStyle().lineLimit(1)
                         Spacer()
-                        Text(file.displaySize).font(.caption).foregroundStyle(.secondary)
+                        Text(file.displaySize).secondaryStyle()
                         Button {
                             model.removeStaged(file)
                         } label: {
@@ -155,18 +153,15 @@ struct SendView: View {
             QRCodeView(payload: payload)
 
             VStack(spacing: 4) {
-                Text("Scan to receive \(sendTitle.lowercased())").font(.system(size: 15))
+                Text("Scan to receive \(sendTitle.lowercased())").sectionStyle()
                 Text("Open the camera or Quick Share on your Android device and scan this code.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .secondaryStyle()
                     .multilineTextAlignment(.center)
             }
 
             HStack(spacing: Theme.Space.sm) {
                 ProgressView().controlSize(.small)
-                Text("Waiting for a device to scan…")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                Text("Waiting for a device to scan…").secondaryStyle()
             }
 
             Button("Cancel", role: .cancel) { model.cancelSend() }
@@ -182,7 +177,7 @@ struct SendView: View {
         Card {
             VStack(spacing: Theme.Space.md) {
                 if pin == nil { ProgressView() }
-                Text(text).font(.system(size: 15)).multilineTextAlignment(.center)
+                Text(text).sectionStyle().multilineTextAlignment(.center)
                 if let pin { PinBadge(pin: pin) }
                 Button("Cancel", role: .cancel) { model.cancelSend() }
                     .buttonStyle(.bordered).controlSize(.large).tint(.secondary)

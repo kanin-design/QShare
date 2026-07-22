@@ -18,15 +18,13 @@ struct SectionHeader: View {
     let title: String
     var trailing: AnyView? = nil
     var body: some View {
-        HStack {
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .tracking(0.9)
+        HStack(spacing: Theme.Space.sm) {
+            Text(title).sectionStyle()
             Spacer()
             trailing
         }
-        .frame(minHeight: 18)   // fixed height so tabs share identical top geometry
+        .frame(minHeight: 22)   // fixed height so tabs share identical top geometry
+        .padding(.horizontal, 2)
     }
 }
 

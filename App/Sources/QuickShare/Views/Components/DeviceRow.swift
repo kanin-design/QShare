@@ -20,10 +20,10 @@ struct DeviceRow: View {
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(device.name).font(.headline)
+                    Text(device.name).primaryStyle()
                     Text(dropTargeted ? "Drop to send" : device.type.rawValue.capitalized)
-                        .font(.caption)
-                        .foregroundStyle(dropTargeted ? Theme.accent : .secondary)
+                        .secondaryStyle()
+                        .foregroundStyle(dropTargeted ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
                 }
 
                 Spacer()

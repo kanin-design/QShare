@@ -56,6 +56,23 @@ enum Theme {
     }
 }
 
+// MARK: - Typography (the whole system — three styles, nothing else)
+
+extension View {
+    /// The one expressive style: slim, airy, ~90% white. Section headers + wordmark.
+    func sectionStyle() -> some View {
+        font(.system(size: 14, weight: .light)).foregroundStyle(.primary.opacity(0.9))
+    }
+    /// Main content text (device names, prompts, file names, steps).
+    func primaryStyle() -> some View {
+        font(.system(size: 13, weight: .regular)).foregroundStyle(.primary.opacity(0.9))
+    }
+    /// Supporting text (subtitles, sizes, hints, in-card labels).
+    func secondaryStyle() -> some View {
+        font(.system(size: 12, weight: .regular)).foregroundStyle(.secondary)
+    }
+}
+
 // MARK: - Surfaces
 
 /// A tinted-glass panel with a hairline border.

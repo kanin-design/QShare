@@ -38,9 +38,7 @@ struct TransferRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(transfer.title)
-                        .font(.system(size: 14, weight: .medium))
-                        .lineLimit(1)
+                    Text(transfer.title).primaryStyle().lineLimit(1)
                     Spacer()
                     statusIndicator
                 }
@@ -50,8 +48,7 @@ struct TransferRow: View {
                 HStack(spacing: 4) {
                     Text(transfer.deviceName); Text("·"); Text(transfer.displaySize)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .secondaryStyle()
             }
 
             trailingControl
@@ -93,8 +90,8 @@ struct TransferRow: View {
                         Image(systemName: icon(for: file))
                             .foregroundStyle(file.url == nil ? Color.secondary : Theme.accent)
                             .frame(width: 20)
-                        Text(file.name).font(.callout).lineLimit(1)
-                            .foregroundStyle(file.url == nil ? .secondary : .primary)
+                        Text(file.name).primaryStyle().lineLimit(1)
+                            .foregroundStyle(file.url == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary.opacity(0.9)))
                         Spacer()
                         if file.url != nil {
                             Image(systemName: "arrow.up.forward")

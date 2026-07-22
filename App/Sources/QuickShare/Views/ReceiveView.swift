@@ -27,16 +27,13 @@ struct ReceiveView: View {
     private var trustedDevices: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text("Trusted devices")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                Text("Trusted devices").secondaryStyle()
                 Text("Files from these devices are accepted automatically.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .secondaryStyle()
                 ForEach(model.trustedDevices, id: \.self) { name in
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: "checkmark.shield.fill").foregroundStyle(Theme.success)
-                        Text(name).font(.callout)
+                        Text(name).primaryStyle()
                         Spacer()
                         Button {
                             model.untrust(name)
@@ -56,11 +53,9 @@ struct ReceiveView: View {
         Card {
             HStack(spacing: Theme.Space.md) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(model.isVisible ? "Visible as" : "Not visible")
-                        .font(.system(size: 15))
+                    Text(model.isVisible ? "Visible as" : "Not visible").primaryStyle()
                     Text(model.isVisible ? model.deviceName : "Turn on to receive files")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .secondaryStyle()
                 }
                 Spacer()
                 GlassSwitch(isOn: Binding(
@@ -74,9 +69,7 @@ struct ReceiveView: View {
     private var instructions: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("On your Android device")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                Text("On your Android device").secondaryStyle()
                 step(1, "Select a file and tap Share, then Quick Share.")
                 step(2, "Choose “\(model.deviceName)” from the list of nearby devices.")
                 step(3, "Confirm the PIN, and files land in [\(model.downloadDirectory.lastPathComponent)](qshare://folder).")
@@ -92,11 +85,11 @@ struct ReceiveView: View {
     private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: Theme.Space.md) {
             Text("\(n)")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(width: 20, height: 20)
-                .background(Theme.accent, in: Circle())
-            Text(text).font(.callout)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+                .background(Color.primary.opacity(0.08), in: Circle())
+            Text(text).primaryStyle()
             Spacer(minLength: 0)
         }
     }

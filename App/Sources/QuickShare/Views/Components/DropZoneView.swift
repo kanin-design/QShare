@@ -16,10 +16,9 @@ struct DropZoneView: View {
                 .symbolEffect(.bounce, value: isTargeted)
 
             Text(isTargeted ? "Release to add" : "Drag files here")
-                .font(.system(size: 15))
+                .sectionStyle()
             Text("or click to choose")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .secondaryStyle()
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Space.xl)
