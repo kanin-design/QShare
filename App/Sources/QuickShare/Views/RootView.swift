@@ -31,8 +31,10 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
+        .background(Theme.windowTint)               // intentional blue wash over the material
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
+        .preferredColorScheme(model.appearance.colorScheme)
         .animation(.easeInOut(duration: 0.2), value: model.connection)
         .sheet(isPresented: incomingBinding) {
             if let req = model.incomingRequest {

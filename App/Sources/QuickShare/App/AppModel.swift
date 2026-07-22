@@ -9,6 +9,20 @@ enum AppMode: String, CaseIterable, Identifiable {
     var symbol: String { self == .send ? "arrow.up.circle.fill" : "arrow.down.circle.fill" }
 }
 
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+    var id: String { rawValue }
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light:  return .light
+        case .dark:   return .dark
+        }
+    }
+}
+
 /// State of the send flow.
 ///
 /// Quick Share has no "connect, then later choose files" step — the handshake
@@ -60,8 +74,10 @@ final class AppModel: ObservableObject {
     // Settings (persisted)
     @Published var downloadDirectory: URL = AppModel.defaultDownloadDirectory()
     @Published var startVisible: Bool = false
+    @Published var appearance: AppAppearance = .system
     private let downloadDirKey = "downloadDirectoryPath"
     private let startVisibleKey = "startVisible"
+    private let appearanceKey = "appearance"
 
     private let service: QuickShareService
 
@@ -79,6 +95,8 @@ final class AppModel: ObservableObject {
             self.downloadDirectory = URL(fileURLWithPath: path)
         }
         self.startVisible = UserDefaults.standard.bool(forKey: startVisibleKey)
+        if let a = UserDefaults.standard.string(forKey: appearanceKey),
+           let parsed = AppAppearance(rawValue: a) { self.appearance = parsed }
         self.service.delegate = self
         self.service.setReceiveDirectory(downloadDirectory)
         if startVisible { self.service.startAdvertising(deviceName: deviceName) }
@@ -110,6 +128,11 @@ final class AppModel: ObservableObject {
     func setStartVisible(_ on: Bool) {
         startVisible = on
         UserDefaults.standard.set(on, forKey: startVisibleKey)
+    }
+
+    func setAppearance(_ a: AppAppearance) {
+        appearance = a
+        UserDefaults.standard.set(a.rawValue, forKey: appearanceKey)
     }
 
     private static func defaultDownloadDirectory() -> URL {

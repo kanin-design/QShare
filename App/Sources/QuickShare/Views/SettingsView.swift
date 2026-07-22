@@ -23,6 +23,16 @@ struct SettingsView: View {
                     .foregroundStyle(.tertiary)
             }
 
+            Section("Appearance") {
+                Picker("Theme", selection: Binding(
+                    get: { model.appearance },
+                    set: { model.setAppearance($0) }
+                )) {
+                    ForEach(AppAppearance.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Receiving") {
                 Toggle("Be visible on launch", isOn: Binding(
                     get: { model.startVisible },
@@ -50,7 +60,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 420)
+        .frame(width: 440, height: 460)
+        .preferredColorScheme(model.appearance.colorScheme)
     }
 
     private func chooseFolder() {

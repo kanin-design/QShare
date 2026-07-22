@@ -1,16 +1,36 @@
 import SwiftUI
+import AppKit
 
-/// Central design tokens. Leans on native materials + system controls so the app
-/// inherits the current macOS (Liquid Glass) look rather than fighting it.
+/// Central design tokens. Panels are an intentional tinted glass (material +
+/// blue wash) so they read the same regardless of the desktop wallpaper, and
+/// adapt to light/dark.
 enum Theme {
 
     // MARK: Color
-    /// App tint. Applied once at the root via `.tint`, so standard controls
-    /// (buttons, toggles, pickers) pick it up automatically.
     static let accent = Color(red: 0.16, green: 0.51, blue: 0.96)
     static let accentSecondary = Color(red: 0.35, green: 0.78, blue: 0.98)
-
     static let success = Color(red: 0.20, green: 0.72, blue: 0.44)
+
+    /// Adaptive blue wash laid over the material for panels/cards.
+    static let panelTint = dynamic(
+        dark: NSColor(srgbRed: 0.10, green: 0.17, blue: 0.30, alpha: 0.55),
+        light: NSColor(srgbRed: 0.62, green: 0.75, blue: 0.93, alpha: 0.30))
+
+    /// Subtler wash for the whole window.
+    static let windowTint = dynamic(
+        dark: NSColor(srgbRed: 0.08, green: 0.13, blue: 0.24, alpha: 0.45),
+        light: NSColor(srgbRed: 0.70, green: 0.81, blue: 0.95, alpha: 0.22))
+
+    /// Hairline border for panels.
+    static let hairline = dynamic(
+        dark: NSColor(white: 1, alpha: 0.10),
+        light: NSColor(white: 0, alpha: 0.08))
+
+    private static func dynamic(dark: NSColor, light: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        })
+    }
 
     // MARK: Spacing (4pt scale)
     enum Space {
@@ -37,7 +57,7 @@ enum Theme {
 
 // MARK: - Surfaces
 
-/// A translucent, hairline-bordered surface that reads as native glass.
+/// A tinted-glass panel with a hairline border.
 struct Card<Content: View>: View {
     var padding: CGFloat = Theme.Space.lg
     @ViewBuilder var content: Content
@@ -51,13 +71,13 @@ struct Card<Content: View>: View {
 }
 
 extension View {
-    /// Material fill + hairline border in a continuous rounded rect.
+    /// Material + blue tint + hairline border in a continuous rounded rect.
     func glassSurface(radius: CGFloat = Theme.Radius.card) -> some View {
-        self
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(.separator, lineWidth: 0.5)
-            )
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return self
+            .background {
+                shape.fill(.regularMaterial).overlay(shape.fill(Theme.panelTint))
+            }
+            .overlay(shape.strokeBorder(Theme.hairline, lineWidth: 0.5))
     }
 }
