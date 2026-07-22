@@ -73,8 +73,8 @@ struct RootView: View {
             SectionHeader(title: "Transfers", trailing: AnyView(
                 Button("Clear") { model.clearFinishedTransfers() }
                     .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(Theme.accent)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
             ))
             ForEach(model.transfers) { transfer in
                 TransferRow(transfer: transfer) { model.cancel(transfer) }

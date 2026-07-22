@@ -17,14 +17,16 @@ struct DropZoneView: View {
 
             VStack(spacing: 2) {
                 Text(isTargeted ? "Release to add" : "Drag files here")
-                    .font(.headline)
+                    .font(.system(size: 15))
                 Text("or")
-                    .font(.caption)
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
 
             Button("Choose Files…", action: chooseFiles)
-                .controlSize(.regular)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .tint(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Space.xl)

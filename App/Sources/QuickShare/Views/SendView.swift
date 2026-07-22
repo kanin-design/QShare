@@ -11,13 +11,13 @@ struct SendView: View {
             case .idle:
                 discoveryList
             case .staging(let device):
-                stagingCard(title: "Send to \(device.name)", icon: device.type.symbol) { sendButton }
+                stagingCard(title: "Send to \(device.name)") { sendButton }
             case .connecting(let device):
                 statusCard(text: "Connecting to \(device.name)…", pin: nil)
             case .awaitingConsent(_, let pin):
                 statusCard(text: "Waiting for the other device to accept…", pin: pin)
             case .qrStaging:
-                stagingCard(title: "Send with QR code", icon: "qrcode") { showQRButton }
+                stagingCard(title: "Send with QR code") { showQRButton }
             case .qrShowing(let payload):
                 qrCard(payload)
             }
@@ -71,7 +71,7 @@ struct SendView: View {
                 .foregroundStyle(Theme.accent)
                 .symbolEffect(.variableColor.iterative, options: .repeating)
             Text("Looking for devices…")
-                .font(.callout)
+                .font(.system(size: 15))
                 .foregroundStyle(.secondary)
             Text("Open Quick Share on your Android device and set it to be visible.")
                 .font(.caption)
@@ -85,15 +85,13 @@ struct SendView: View {
 
     // MARK: Staging (shared by device-send and QR-send)
 
-    private func stagingCard(title: String, icon: String,
+    private func stagingCard(title: String,
                              @ViewBuilder primary: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
-            HStack {
-                Image(systemName: icon).foregroundStyle(Theme.accent)
-                Text(title).font(.headline)
-                Spacer()
-                Button("Back") { model.cancelSend() }.controlSize(.small)
-            }
+            SectionHeader(title: title, trailing: AnyView(
+                Button("Back") { model.cancelSend() }
+                    .buttonStyle(.bordered).controlSize(.small).tint(.secondary)
+            ))
 
             DropZoneView { urls in model.stage(urls: urls) }
 
@@ -153,9 +151,9 @@ struct SendView: View {
             QRCodeView(payload: payload)
 
             VStack(spacing: 4) {
-                Text("Scan to receive \(sendTitle.lowercased())").font(.headline)
+                Text("Scan to receive \(sendTitle.lowercased())").font(.system(size: 15))
                 Text("Open the camera or Quick Share on your Android device and scan this code.")
-                    .font(.caption)
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -163,12 +161,12 @@ struct SendView: View {
             HStack(spacing: Theme.Space.sm) {
                 ProgressView().controlSize(.small)
                 Text("Waiting for a device to scan…")
-                    .font(.caption)
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
 
             Button("Cancel", role: .cancel) { model.cancelSend() }
-                .controlSize(.large)
+                .buttonStyle(.bordered).controlSize(.large).tint(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Theme.Space.sm)
@@ -180,10 +178,10 @@ struct SendView: View {
         Card {
             VStack(spacing: Theme.Space.md) {
                 if pin == nil { ProgressView() }
-                Text(text).font(.headline).multilineTextAlignment(.center)
+                Text(text).font(.system(size: 15)).multilineTextAlignment(.center)
                 if let pin { PinBadge(pin: pin) }
                 Button("Cancel", role: .cancel) { model.cancelSend() }
-                    .controlSize(.large)
+                    .buttonStyle(.bordered).controlSize(.large).tint(.secondary)
             }
             .frame(maxWidth: .infinity)
         }

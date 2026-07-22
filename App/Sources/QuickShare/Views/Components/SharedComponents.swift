@@ -20,7 +20,7 @@ struct SectionHeader: View {
     var body: some View {
         HStack {
             Text(title.uppercased())
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .tracking(0.5)
             Spacer()

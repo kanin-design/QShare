@@ -68,7 +68,7 @@ struct ReceiveView: View {
                     HStack(spacing: Theme.Space.sm) {
                         if model.isVisible { PulsingDot() }
                         Text(model.isVisible ? "Visible as" : "Not visible")
-                            .font(.headline)
+                            .font(.system(size: 15))
                     }
                     Text(model.isVisible ? model.deviceName : "Turn on to receive files")
                         .font(.callout)
