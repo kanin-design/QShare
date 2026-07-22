@@ -75,7 +75,7 @@ struct SendView: View {
                 .foregroundStyle(Theme.accent)
                 .symbolEffect(.variableColor.iterative, options: .repeating)
             Text("Looking for devices…")
-                .sectionStyle()
+                .cardTitle()
             Text("Open Quick Share on your Android device and set it to be visible.")
                 .secondaryStyle()
                 .multilineTextAlignment(.center)
@@ -153,7 +153,7 @@ struct SendView: View {
             QRCodeView(payload: payload)
 
             VStack(spacing: 4) {
-                Text("Scan to receive \(sendTitle.lowercased())").sectionStyle()
+                Text("Scan to receive \(sendTitle.lowercased())").cardTitle()
                 Text("Open the camera or Quick Share on your Android device and scan this code.")
                     .secondaryStyle()
                     .multilineTextAlignment(.center)
@@ -177,7 +177,7 @@ struct SendView: View {
         Card {
             VStack(spacing: Theme.Space.md) {
                 if pin == nil { ProgressView() }
-                Text(text).sectionStyle().multilineTextAlignment(.center)
+                Text(text).cardTitle().multilineTextAlignment(.center)
                 if let pin { PinBadge(pin: pin) }
                 Button("Cancel", role: .cancel) { model.cancelSend() }
                     .buttonStyle(.bordered).controlSize(.large).tint(.secondary)

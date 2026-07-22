@@ -59,19 +59,20 @@ enum Theme {
 // MARK: - Typography (the whole system — three styles, nothing else)
 
 extension View {
-    /// The one expressive style: slim, airy, ~90% white. Section headers + wordmark.
+    /// Quiet group label above a card (like macOS "Theme"): small, semibold, muted.
     func sectionStyle() -> some View {
-        font(.system(size: 14, weight: .light)).foregroundStyle(.primary.opacity(0.9))
+        font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)
     }
-    /// The first line of every card — its headline. Identical across all cards.
+    /// The headline — biggest + heaviest (like macOS "Liquid Glass"). First line
+    /// of every card, and focal prompts.
     func cardTitle() -> some View {
-        font(.system(size: 15, weight: .medium)).foregroundStyle(.primary)
+        font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary)
     }
-    /// Main content text (device names, prompts, file names, steps).
+    /// Main content text (device names, file names, steps).
     func primaryStyle() -> some View {
-        font(.system(size: 13, weight: .regular)).foregroundStyle(.primary.opacity(0.9))
+        font(.system(size: 13, weight: .regular)).foregroundStyle(.primary)
     }
-    /// Supporting text (subtitles, sizes, hints, in-card labels).
+    /// The muted subtext — just smaller and quieter (like "Choose your…").
     func secondaryStyle() -> some View {
         font(.system(size: 12, weight: .regular)).foregroundStyle(.secondary)
     }

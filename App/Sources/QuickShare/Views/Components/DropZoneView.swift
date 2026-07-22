@@ -16,7 +16,7 @@ struct DropZoneView: View {
                 .symbolEffect(.bounce, value: isTargeted)
 
             Text(isTargeted ? "Release to add" : "Drag files here")
-                .sectionStyle()
+                .cardTitle()
             Text("or click to choose")
                 .secondaryStyle()
         }
