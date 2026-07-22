@@ -82,6 +82,21 @@ final class AppModel: ObservableObject {
         self.service.delegate = self
         self.service.setReceiveDirectory(downloadDirectory)
         if startVisible { self.service.startAdvertising(deviceName: deviceName) }
+        // Discover continuously so the menu-bar list is always current.
+        self.service.startDiscovery()
+    }
+
+    /// Devices currently reachable, trusted ones first.
+    var availableDevices: [RemoteDevice] {
+        discoveredDevices.sorted {
+            isTrusted($0.name) && !isTrusted($1.name)
+        }
+    }
+
+    /// Jump into the send flow targeting a specific device (from the menu).
+    func prepareSend(to device: RemoteDevice) {
+        mode = .send
+        connection = .staging(device)
     }
 
     // MARK: Settings

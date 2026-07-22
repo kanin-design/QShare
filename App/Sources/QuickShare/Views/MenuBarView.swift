@@ -8,6 +8,21 @@ struct MenuBarView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        if model.availableDevices.isEmpty {
+            Text("Looking for devices…")
+        } else {
+            Text("Send to")
+            ForEach(model.availableDevices) { device in
+                Button {
+                    sendTo(device)
+                } label: {
+                    Label(device.name,
+                          systemImage: model.isTrusted(device.name) ? "checkmark.shield.fill" : device.type.symbol)
+                }
+            }
+        }
+        Divider()
+
         Toggle("Receive files (visible)", isOn: Binding(
             get: { model.isVisible },
             set: { _ in model.toggleVisibility() }
@@ -33,5 +48,13 @@ struct MenuBarView: View {
             .keyboardShortcut(",")
         Button("Quit QShare") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
+    }
+
+    /// Open the window straight into the drop-zone targeting `device`.
+    private func sendTo(_ device: RemoteDevice) {
+        NSApp.setActivationPolicy(.regular)
+        model.prepareSend(to: device)
+        openWindow(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

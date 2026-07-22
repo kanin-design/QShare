@@ -22,8 +22,6 @@ struct SendView: View {
                 qrCard(payload)
             }
         }
-        .onAppear { model.startDiscovery() }
-        .onDisappear { model.stopDiscovery() }
     }
 
     // MARK: Discovery
