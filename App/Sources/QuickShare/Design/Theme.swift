@@ -10,6 +10,7 @@ enum Theme {
     static let accent = Color(red: 0.16, green: 0.51, blue: 0.96)
     static let accentSecondary = Color(red: 0.35, green: 0.78, blue: 0.98)
     static let success = Color(red: 0.20, green: 0.72, blue: 0.44)
+    static let danger = Color(red: 0.90, green: 0.32, blue: 0.32)
 
     /// Adaptive blue wash laid over the material for panels/cards.
     static let panelTint = dynamic(

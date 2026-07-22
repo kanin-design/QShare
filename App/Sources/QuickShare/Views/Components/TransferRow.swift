@@ -38,12 +38,11 @@ struct TransferRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(transfer.title).font(.headline).lineLimit(1)
+                    Text(transfer.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .lineLimit(1)
                     Spacer()
-                    Text(statusText)
-                        .font(.caption)
-                        .foregroundStyle(statusColor)
-                        .contentTransition(.numericText())
+                    statusIndicator
                 }
                 if transfer.phase == .transferring {
                     ProgressView(value: transfer.fraction).tint(Theme.accent)
@@ -156,21 +155,30 @@ struct TransferRow: View {
         transfer.direction == .incoming ? "arrow.down" : "arrow.up"
     }
 
-    private var statusText: String {
+    /// Status as an icon (or % while transferring) — never a colored word.
+    @ViewBuilder private var statusIndicator: some View {
         switch transfer.phase {
-        case .connecting:      return "Connecting…"
-        case .awaitingConsent: return "Waiting…"
-        case .transferring:    return "\(Int(transfer.fraction * 100))%"
-        case .completed:       return "Done"
-        case .cancelled:       return "Cancelled"
-        case .failed(let e):   return e
+        case .connecting, .awaitingConsent:
+            ProgressView().controlSize(.small)
+        case .transferring:
+            Text("\(Int(transfer.fraction * 100))%")
+                .font(.system(size: 11, weight: .medium)).monospacedDigit()
+                .foregroundStyle(Theme.accent)
+                .contentTransition(.numericText())
+        case .completed:
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.success)
+        case .failed(let e):
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.danger).help(e)
+        case .cancelled:
+            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
         }
     }
 
     private var statusColor: Color {
         switch transfer.phase {
         case .completed: return Theme.success
-        case .failed:    return .red
+        case .failed:    return Theme.danger
         case .cancelled: return .secondary
         default:         return Theme.accent
         }

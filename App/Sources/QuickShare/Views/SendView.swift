@@ -51,14 +51,20 @@ struct SendView: View {
             Button {
                 model.startQRSend()
             } label: {
-                Label("Don’t see your device? Use a QR code", systemImage: "qrcode")
-                    .frame(maxWidth: .infinity)
+                HStack(spacing: Theme.Space.md) {
+                    Image(systemName: "qrcode").foregroundStyle(Theme.accent).frame(width: 28)
+                    Text("Don’t see your device? Use a QR code").font(.system(size: 13))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, Theme.Space.md)
+                .padding(.vertical, Theme.Space.sm + 2)
+                .contentShape(Rectangle())
+                .glassSurface(radius: Theme.Radius.control)
             }
-            .controlSize(.large)
-            .buttonStyle(.bordered)
-            .tint(.secondary)
-            .focusEffectDisabled()      // no stray focus ring
-            .padding(.top, Theme.Space.xs)
+            .buttonStyle(.plain)
+            .focusEffectDisabled()
         }
     }
 

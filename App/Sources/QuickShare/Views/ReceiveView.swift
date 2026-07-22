@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Receive flow: make the Mac visible over the network. Android then finds it by
 /// name in its own Quick Share device picker. The accept/decline prompt is
@@ -78,12 +79,17 @@ struct ReceiveView: View {
                     .foregroundStyle(.secondary)
                 step(1, "Select a file and tap Share, then Quick Share.")
                 step(2, "Choose “\(model.deviceName)” from the list of nearby devices.")
-                step(3, "Confirm the PIN matches, and the file lands in your Downloads.")
+                step(3, "Confirm the PIN, and files land in [\(model.downloadDirectory.lastPathComponent)](qshare://folder).")
             }
+            .tint(Theme.accent)
+            .environment(\.openURL, OpenURLAction { _ in
+                NSWorkspace.shared.open(model.downloadDirectory)
+                return .handled
+            })
         }
     }
 
-    private func step(_ n: Int, _ text: String) -> some View {
+    private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: Theme.Space.md) {
             Text("\(n)")
                 .font(.caption.weight(.bold))
