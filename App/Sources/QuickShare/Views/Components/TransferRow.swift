@@ -1,9 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// One transfer (incoming or outgoing) with progress and status. When finished
-/// and multi-file, it expands to reveal individual files that open on click;
-/// the row itself reveals the item(s) in Finder.
+/// A compact transfer row. A small ↑/↓ arrow marks sent vs received; filename +
+/// (size · device) inline; status glyph trailing. Completed multi-file transfers
+/// expand to their files; single completed transfers reveal in Finder on click.
 struct TransferRow: View {
     let transfer: ActiveTransfer
     let onCancel: () -> Void
@@ -18,67 +18,91 @@ struct TransferRow: View {
         VStack(spacing: 0) {
             header
             if expanded {
-                Divider().padding(.leading, 46)
+                Divider().padding(.leading, 38)
                 fileList
             }
         }
         .glassSurface(radius: Theme.Radius.control)
     }
 
-    // MARK: Header
+    // MARK: Header (~40pt)
 
     private var header: some View {
-        HStack(spacing: Theme.Space.md) {
-            ZStack {
-                Circle().fill(statusColor.opacity(0.15)).frame(width: 30, height: 30)
-                Image(systemName: directionSymbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(statusColor)
+        HStack(spacing: Theme.Space.sm) {
+            directionBadge
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(transfer.title)
+                    .font(.system(size: 12, weight: .medium)).lineLimit(1)
+                Text("\(transfer.displaySize) · \(transfer.deviceName)")
+                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(transfer.title).primaryStyle().lineLimit(1)
-                    Spacer()
-                    statusIndicator
-                }
-                if transfer.phase == .transferring {
-                    ProgressView(value: transfer.fraction).tint(Theme.accent)
-                }
-                HStack(spacing: 4) {
-                    Text(transfer.deviceName); Text("·"); Text(transfer.displaySize)
-                }
-                .secondaryStyle()
-            }
-
-            trailingControl
+            Spacer(minLength: Theme.Space.sm)
+            trailing
         }
-        .padding(Theme.Space.lg)
+        .padding(.horizontal, Theme.Space.md)
+        .padding(.vertical, 7)
+        .overlay(alignment: .bottom) {
+            if transfer.phase == .transferring {
+                GeometryReader { g in
+                    Capsule().fill(Theme.accent)
+                        .frame(width: g.size.width * transfer.fraction, height: 2)
+                }
+                .frame(height: 2)
+                .padding(.horizontal, Theme.Space.md)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture(perform: primaryAction)
-        .help(primaryHelp)
+        .help(transfer.phase == .completed ? (isExpandable ? "Show files" : "Reveal in Finder") : "")
     }
 
-    @ViewBuilder private var trailingControl: some View {
-        if transfer.phase == .transferring {
-            Button(role: .cancel, action: onCancel) {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+    private var directionBadge: some View {
+        Image(systemName: transfer.direction == .incoming ? "arrow.down" : "arrow.up")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(transfer.direction == .incoming ? Theme.success : Theme.accent)
+            .frame(width: 20, height: 20)
+            .background((transfer.direction == .incoming ? Theme.success : Theme.accent).opacity(0.14),
+                        in: Circle())
+    }
+
+    @ViewBuilder private var trailing: some View {
+        switch transfer.phase {
+        case .connecting, .awaitingConsent:
+            ProgressView().controlSize(.small)
+        case .transferring:
+            HStack(spacing: 6) {
+                Text("\(Int(transfer.fraction * 100))%")
+                    .font(.system(size: 10, weight: .medium)).monospacedDigit()
+                    .foregroundStyle(Theme.accent).contentTransition(.numericText())
+                Button(role: .cancel, action: onCancel) {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain).accessibilityLabel("Cancel transfer")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Cancel transfer")
-        } else if isExpandable {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .rotationEffect(.degrees(expanded ? 90 : 0))
-        } else if transfer.phase == .completed, transfer.revealURL != nil {
-            Image(systemName: "arrow.up.forward.app")
-                .font(.system(size: 13))
-                .foregroundStyle(.tertiary)
+        case .completed:
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13)).foregroundStyle(Theme.success)
+                if isExpandable {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                } else if transfer.revealURL != nil {
+                    Image(systemName: "arrow.up.forward")
+                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+                }
+            }
+        case .failed(let e):
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12)).foregroundStyle(Theme.danger).help(e)
+        case .cancelled:
+            Image(systemName: "minus.circle.fill").font(.system(size: 12)).foregroundStyle(.secondary)
         }
     }
 
-    // MARK: Expanded file list
+    // MARK: Expanded files
 
     private var fileList: some View {
         VStack(spacing: 0) {
@@ -88,28 +112,27 @@ struct TransferRow: View {
                 } label: {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: icon(for: file))
+                            .font(.system(size: 11))
                             .foregroundStyle(file.url == nil ? Color.secondary : Theme.accent)
-                            .frame(width: 20)
-                        Text(file.name).primaryStyle().lineLimit(1)
-                            .foregroundStyle(file.url == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary.opacity(0.9)))
+                            .frame(width: 16)
+                        Text(file.name).font(.system(size: 11)).lineLimit(1)
+                            .foregroundStyle(file.url == nil ? .secondary : .primary)
                         Spacer()
                         if file.url != nil {
                             Image(systemName: "arrow.up.forward")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.tertiary)
+                                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
                         }
                     }
-                    .padding(.vertical, 7)
-                    .padding(.horizontal, Theme.Space.md)
-                    .padding(.leading, 30)
+                    .padding(.vertical, 5)
+                    .padding(.trailing, Theme.Space.md)
+                    .padding(.leading, 38)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .disabled(file.url == nil)
+                .buttonStyle(.plain).disabled(file.url == nil)
                 .accessibilityLabel(file.url == nil ? file.name : "Open \(file.name)")
             }
         }
-        .padding(.bottom, 6)
+        .padding(.bottom, 4)
     }
 
     // MARK: Actions
@@ -119,23 +142,12 @@ struct TransferRow: View {
             withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
         } else if transfer.phase == .completed {
             let urls = transfer.openableFiles.compactMap(\.url)
-            if urls.count == 1 {
-                NSWorkspace.shared.activateFileViewerSelecting(urls)   // reveal single file
-            } else if !urls.isEmpty {
-                NSWorkspace.shared.activateFileViewerSelecting(urls)
-            }
+            if !urls.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(urls) }
         }
-    }
-
-    private var primaryHelp: String {
-        guard transfer.phase == .completed else { return "" }
-        return isExpandable ? "Show files" : "Reveal in Finder"
     }
 
     private func icon(for file: TransferFile) -> String {
-        guard let ext = file.url?.pathExtension.lowercased() ?? file.name.split(separator: ".").last.map(String.init)?.lowercased() else {
-            return "doc.fill"
-        }
+        let ext = (file.url?.pathExtension ?? (file.name as NSString).pathExtension).lowercased()
         switch ext {
         case "jpg", "jpeg", "png", "gif", "heic", "webp": return "photo.fill"
         case "mp4", "mov", "avi", "mkv":                   return "film.fill"
@@ -143,41 +155,6 @@ struct TransferRow: View {
         case "pdf":                                        return "doc.richtext.fill"
         case "zip", "rar", "7z", "tar", "gz":              return "archivebox.fill"
         default:                                           return "doc.fill"
-        }
-    }
-
-    // MARK: Status styling
-
-    private var directionSymbol: String {
-        transfer.direction == .incoming ? "arrow.down" : "arrow.up"
-    }
-
-    /// Status as an icon (or % while transferring) — never a colored word.
-    @ViewBuilder private var statusIndicator: some View {
-        switch transfer.phase {
-        case .connecting, .awaitingConsent:
-            ProgressView().controlSize(.small)
-        case .transferring:
-            Text("\(Int(transfer.fraction * 100))%")
-                .font(.system(size: 11, weight: .medium)).monospacedDigit()
-                .foregroundStyle(Theme.accent)
-                .contentTransition(.numericText())
-        case .completed:
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.success)
-        case .failed(let e):
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Theme.danger).help(e)
-        case .cancelled:
-            Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
-        }
-    }
-
-    private var statusColor: Color {
-        switch transfer.phase {
-        case .completed: return Theme.success
-        case .failed:    return Theme.danger
-        case .cancelled: return .secondary
-        default:         return Theme.accent
         }
     }
 }

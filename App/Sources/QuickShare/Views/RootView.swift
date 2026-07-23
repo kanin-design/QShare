@@ -14,27 +14,27 @@ struct RootView: View {
                 .padding(.horizontal, Theme.Space.lg)
                 .padding(.bottom, Theme.Space.md)
 
-            // Only the content scrolls; header + tabs stay put. Hidden indicators
-            // so there's no visible scrollbar.
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Space.lg) {
-                    Group {
-                        switch model.mode {
-                        case .send:    SendView()
-                        case .receive: ReceiveView()
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.2), value: model.mode)
-
-                    if !model.transfers.isEmpty {
-                        transfersSection
-                    }
+            // Fixed controls (send/receive)…
+            Group {
+                switch model.mode {
+                case .send:    SendView()
+                case .receive: ReceiveView()
                 }
-                .padding(.horizontal, Theme.Space.lg)
-                .padding(.bottom, Theme.Space.lg)
-                .background(ScrollerHider())   // no legacy scrollbar even on "always show"
             }
-            .scrollIndicators(.hidden)
+            .animation(.easeInOut(duration: 0.2), value: model.mode)
+            .padding(.horizontal, Theme.Space.lg)
+
+            // …then the transfers history fills the rest and scrolls on its own.
+            if !model.transfers.isEmpty {
+                TransfersList(transfers: model.transfers,
+                              onClear: { model.clearFinishedTransfers() },
+                              onCancel: { model.cancel($0) })
+                    .padding(.horizontal, Theme.Space.lg)
+                    .padding(.top, Theme.Space.lg)
+                    .frame(maxHeight: .infinity)
+            } else {
+                Spacer(minLength: 0)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
@@ -78,19 +78,6 @@ struct RootView: View {
         ModeToggle(selection: $model.mode)
     }
 
-    private var transfersSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            SectionHeader(title: "Transfers", trailing: AnyView(
-                Button("Clear") { model.clearFinishedTransfers() }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.accent)
-            ))
-            ForEach(model.transfers) { transfer in
-                TransferRow(transfer: transfer) { model.cancel(transfer) }
-            }
-        }
-    }
 }
 
 /// Custom Send/Receive control: a rounded track with a smooth sliding glass pill
@@ -132,26 +119,5 @@ struct ModeToggle: View {
         .overlay(
             Capsule(style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
         )
-    }
-}
-
-/// Forces the enclosing NSScrollView to use overlay (auto-hiding) scrollers and
-/// hides them, so no persistent scrollbar shows even when the system is set to
-/// "always show scroll bars".
-private struct ScrollerHider: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let v = NSView()
-        DispatchQueue.main.async { Self.configure(v) }
-        return v
-    }
-    func updateNSView(_ v: NSView, context: Context) {
-        DispatchQueue.main.async { Self.configure(v) }
-    }
-    private static func configure(_ v: NSView) {
-        guard let sv = v.enclosingScrollView else { return }
-        sv.scrollerStyle = .overlay
-        sv.autohidesScrollers = true
-        sv.hasVerticalScroller = false
-        sv.hasHorizontalScroller = false
     }
 }
