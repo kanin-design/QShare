@@ -33,10 +33,6 @@ struct MenuBarView: View {
             Divider()
             Text(active == 1 ? "1 transfer in progress" : "\(active) transfers in progress")
         }
-        if !model.trustedDevices.isEmpty {
-            Divider()
-            Text("Trusted: \(model.trustedDevices.joined(separator: ", "))")
-        }
 
         Divider()
         Button("Open QShare") {
