@@ -31,7 +31,7 @@ struct TransfersList: View {
     private var scrollable: Bool { metrics.content - metrics.container > 1 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+        VStack(alignment: .leading, spacing: Theme.Space.md) {
             SectionHeader(title: "Transfers", trailing: AnyView(
                 Button("Clear", action: onClear)
                     .buttonStyle(.plain)
@@ -44,16 +44,14 @@ struct TransfersList: View {
                 let panelH = contentHeight <= 0 ? geo.size.height : min(contentHeight, geo.size.height)
 
                 ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(transfers.enumerated()), id: \.element.id) { idx, t in
+                    // Same construction as the nearby-devices list: hover-highlighting
+                    // rows on one glass panel, separated by a 2pt gap (no divider lines).
+                    VStack(spacing: 2) {
+                        ForEach(transfers) { t in
                             TransferRow(transfer: t) { onCancel(t) }
-                            if idx < transfers.count - 1 {
-                                Divider()
-                                    .overlay(Theme.hairline)
-                                    .padding(.leading, 40)   // align under the filename
-                            }
                         }
                     }
+                    .padding(Theme.Space.xs)
                     .background(ScrollerHider())   // suppress native scroller + its background
                     .background(GeometryReader { g in
                         Color.clear.preference(key: ContentHeightKey.self, value: g.size.height)

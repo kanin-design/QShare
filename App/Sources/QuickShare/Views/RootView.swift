@@ -12,7 +12,8 @@ struct RootView: View {
             header
             modePicker
                 .padding(.horizontal, Theme.Space.lg)
-                .padding(.bottom, Theme.Space.md)
+                .padding(.top, Theme.Space.lg)
+                .padding(.bottom, Theme.Space.lg)
 
             // Fixed controls (send/receive)…
             Group {

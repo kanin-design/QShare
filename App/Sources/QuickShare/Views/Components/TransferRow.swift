@@ -9,6 +9,7 @@ struct TransferRow: View {
     let onCancel: () -> Void
 
     @State private var expanded = false
+    @State private var hovering = false
 
     private var isExpandable: Bool {
         transfer.phase == .completed && transfer.openableFiles.count > 1
@@ -23,6 +24,11 @@ struct TransferRow: View {
             }
         }
         .contentShape(Rectangle())
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                .fill(hovering ? Color.primary.opacity(0.06) : Color.clear)
+        )
+        .onHover { hovering = $0 }
     }
 
     // MARK: Header (~40pt)
