@@ -105,6 +105,33 @@ final class AppModel: ObservableObject {
         // Localhost control API for the `qshare` CLI / automation.
         self.controlServer = ControlServer(model: self)
         self.controlServer?.start()
+
+        if ProcessInfo.processInfo.environment["QS_MOCK"] != nil { seedDemoTransfers() }
+    }
+
+    /// Demo data for the mock build: 10 sent files + a couple of multi-file groups.
+    private func seedDemoTransfers() {
+        let dl = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let devices = ["Noise’s phone", "Pixel 8 Pro", "Galaxy S24"]
+        let names = ["sunset.jpg", "budget-2026.pdf", "IMG_4821.heic", "demo-reel.mp4",
+                     "meeting-notes.txt", "invoice.pdf", "favourite-song.mp3",
+                     "screenshot.png", "project-archive.zip", "keynote.key"]
+        func file(_ n: String) -> TransferFile { TransferFile(name: n, url: dl.appendingPathComponent(n)) }
+
+        var demo: [ActiveTransfer] = names.enumerated().map { i, n in
+            ActiveTransfer(id: "demo-\(i)", direction: .outgoing, deviceName: devices[i % devices.count],
+                           title: n, totalBytes: Int64((i + 1) * 1_400_000 + 250_000),
+                           fraction: 1, phase: .completed, files: [file(n)])
+        }
+        let g1 = ["vacation-1.jpg", "vacation-2.jpg", "vacation-3.jpg"]
+        demo.append(ActiveTransfer(id: "demo-g1", direction: .outgoing, deviceName: "Noise’s phone",
+                                   title: "3 files", totalBytes: 8_400_000, fraction: 1,
+                                   phase: .completed, files: g1.map(file)))
+        let g2 = ["clip-1.mp4", "clip-2.mp4", "voice-memo.m4a", "album-cover.png", "readme.md"]
+        demo.append(ActiveTransfer(id: "demo-g2", direction: .incoming, deviceName: "Galaxy S24",
+                                   title: "5 files", totalBytes: 210_000_000, fraction: 1,
+                                   phase: .completed, files: g2.map(file)))
+        transfers = demo
     }
 
     // MARK: CLI / control API
