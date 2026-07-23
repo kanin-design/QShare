@@ -22,6 +22,7 @@ struct SettingsView: View {
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
         .preferredColorScheme(model.appearance.colorScheme)
+        .focusEffectDisabled()
     }
 
     private var downloadsCard: some View {

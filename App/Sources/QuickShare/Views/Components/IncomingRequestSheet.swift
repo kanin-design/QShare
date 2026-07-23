@@ -51,5 +51,6 @@ struct IncomingRequestSheet: View {
         }
         .padding(Theme.Space.xl)
         .frame(width: 320)
+        .focusEffectDisabled()
     }
 }

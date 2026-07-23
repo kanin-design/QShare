@@ -35,6 +35,7 @@ struct RootView: View {
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
         .preferredColorScheme(model.appearance.colorScheme)
+        .focusEffectDisabled()          // mouse-only app — no keyboard focus rings
         .animation(.easeInOut(duration: 0.2), value: model.connection)
         .sheet(isPresented: incomingBinding) {
             if let req = model.incomingRequest {
