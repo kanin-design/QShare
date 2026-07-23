@@ -8,17 +8,33 @@ TOKEN_FILE="$HOME/.config/qshare/token"
 
 usage() {
   cat <<'EOF'
-qshare — send files to nearby Android devices via the QShare app
+qshare — send files to nearby Android devices via the QShare app.
 
 USAGE
-  qshare list [--json]                  List currently-visible devices
-  qshare send <file>... --to <name>     Send file(s) to a device (name or id)
+  qshare list [--json]                  List devices currently visible for sending
+  qshare send <file>... --to <name>     Send file(s) to a device (name or id);
+                                          blocks until done (exit 0 = success)
   qshare status [--json]                Show active/recent transfers
   qshare --help
 
+OPTIONS
+  --json    Print raw JSON instead of formatted text (for scripts / AI).
+  --to <n>  Target device: a name from `qshare list`, or its id.
+
+EXAMPLES
+  qshare list --json
+  qshare send ~/photo.jpg --to "Noise's phone"
+  qshare send a.jpg b.pdf --to Pixel --json
+
+OUTPUT (send --json)   {"ok":true,"pin":"8374","error":null}
+EXIT CODES             0 ok · 1 failed/unreachable · 2 usage error
+
 NOTES
-  The QShare app must be running — it hosts the local API on 127.0.0.1:47821.
-  Output is JSON-friendly with --json (for scripts / AI).
+  * QShare.app must be running — it hosts the local API on 127.0.0.1:47821
+    (loopback only; token at ~/.config/qshare/token).
+  * The receiver must accept the transfer (a PIN prompt) unless the device is
+    marked "trusted" in QShare, in which case it auto-accepts.
+  * Full API + agent guide: docs/API.md in the QShare repo.
 EOF
 }
 

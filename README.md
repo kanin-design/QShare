@@ -60,9 +60,7 @@ qshare status
 qshare --help
 ```
 
-Raw API (for AI/other languages): `GET /devices`, `GET /transfers`,
-`POST /send {"paths":[…],"to":"…"}` — all with header
-`Authorization: Bearer <token>`.
+Full spec + agent recipe: **[docs/API.md](docs/API.md)** (endpoints, JSON shapes, examples, error codes).
 
 ## Status
 
