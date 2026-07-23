@@ -44,6 +44,26 @@ QS_MOCK=1 swift run QuickShare     # simulated devices, PINs, progress
 
 Requires macOS 14+ and a recent Swift toolchain (built with Swift 6.3 / Xcode 26).
 
+## CLI / automation (`qshare`)
+
+The running app hosts a localhost JSON API on `127.0.0.1:47821`, guarded by a
+token in `~/.config/qshare/token`. The `qshare` CLI (or any tool/AI) drives it.
+
+```bash
+# install the CLI (app must be running for it to work):
+ln -s "$(pwd)/App/Packaging/qshare" /usr/local/bin/qshare
+
+qshare list                                  # visible devices (★ = trusted)
+qshare list --json                           # machine-readable
+qshare send ~/photo.jpg --to "Noise's phone" # blocks until sent; exit 0 on success
+qshare status
+qshare --help
+```
+
+Raw API (for AI/other languages): `GET /devices`, `GET /transfers`,
+`POST /send {"paths":[…],"to":"…"}` — all with header
+`Authorization: Bearer <token>`.
+
 ## Status
 
 - [x] Research + protocol/prior-art review (see docs/ARCHITECTURE.md)

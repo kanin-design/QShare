@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# qshare — drive the running QShare app from the terminal (or an AI/tool).
+# Talks to the app's localhost API on 127.0.0.1:47821.
+set -euo pipefail
+
+BASE="http://127.0.0.1:47821"
+TOKEN_FILE="$HOME/.config/qshare/token"
+
+usage() {
+  cat <<'EOF'
+qshare — send files to nearby Android devices via the QShare app
+
+USAGE
+  qshare list [--json]                  List currently-visible devices
+  qshare send <file>... --to <name>     Send file(s) to a device (name or id)
+  qshare status [--json]                Show active/recent transfers
+  qshare --help
+
+NOTES
+  The QShare app must be running — it hosts the local API on 127.0.0.1:47821.
+  Output is JSON-friendly with --json (for scripts / AI).
+EOF
+}
+
+api() { # method path [json-body]
+  local method="$1" path="$2" data="${3:-}"
+  local token; token="$(cat "$TOKEN_FILE" 2>/dev/null || true)"
+  [[ -n "$token" ]] || { echo "qshare: no token at $TOKEN_FILE — launch the QShare app once." >&2; exit 1; }
+  local args=(-s -m 600 -H "Authorization: Bearer $token")
+  [[ -n "$data" ]] && args+=(-X "$method" -H "Content-Type: application/json" -d "$data")
+  curl "${args[@]}" "$BASE$path" 2>/dev/null || {
+    echo "qshare: can't reach QShare on $BASE — is the app running?" >&2; exit 1; }
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  -h|--help|"") usage ;;
+
+  list)
+    out="$(api GET /devices)"
+    if [[ "${2:-}" == "--json" ]]; then echo "$out"; else
+      echo "$out" | python3 -c '
+import sys,json
+d=json.load(sys.stdin)
+if not d: print("No visible devices."); sys.exit()
+w=max(len(x["name"]) for x in d)
+for x in d:
+    print(f'"'"'{x["name"]:<{w}}  {x["type"]}{"  ★ trusted" if x.get("trusted") else ""}'"'"')'
+    fi ;;
+
+  status)
+    out="$(api GET /transfers)"
+    if [[ "${2:-}" == "--json" ]]; then echo "$out"; else
+      echo "$out" | python3 -c '
+import sys,json
+d=json.load(sys.stdin)
+if not d: print("No transfers."); sys.exit()
+for x in d: print(f'"'"'{x["title"]}  -> {x["device"]}  {x["phase"]} {x["percent"]}%'"'"')'
+    fi ;;
+
+  send)
+    shift; files=(); to=""; asjson=0
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --to) to="${2:-}"; shift 2 ;;
+        --json) asjson=1; shift ;;
+        *) files+=("$1"); shift ;;
+      esac
+    done
+    [[ -n "$to" && ${#files[@]} -gt 0 ]] || { echo "usage: qshare send <file>... --to <name>" >&2; exit 2; }
+    body="$(python3 -c '
+import sys,json,os
+print(json.dumps({"paths":[os.path.abspath(p) for p in sys.argv[2:]], "to":sys.argv[1]}))' "$to" "${files[@]}")"
+    echo "Sending ${#files[@]} file(s) to \"$to\"…" >&2
+    resp="$(api POST /send "$body")"
+    [[ "$asjson" == 1 ]] && echo "$resp"
+    ok="$(echo "$resp" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("ok"))' 2>/dev/null || echo False)"
+    if [[ "$ok" == "True" ]]; then echo "✓ Sent to \"$to\"."; else
+      err="$(echo "$resp" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("error"))' 2>/dev/null || echo "unknown")"
+      echo "✗ Failed: $err" >&2; exit 1
+    fi ;;
+
+  *) echo "qshare: unknown command '$cmd'" >&2; usage; exit 2 ;;
+esac

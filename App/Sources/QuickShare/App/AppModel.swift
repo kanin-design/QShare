@@ -102,6 +102,52 @@ final class AppModel: ObservableObject {
         if startVisible { self.service.startAdvertising(deviceName: deviceName) }
         // Discover continuously so the menu-bar list is always current.
         self.service.startDiscovery()
+        // Localhost control API for the `qshare` CLI / automation.
+        self.controlServer = ControlServer(model: self)
+        self.controlServer?.start()
+    }
+
+    // MARK: CLI / control API
+
+    private var controlServer: ControlServer?
+    struct CliSendResult { let ok: Bool; let pin: String?; let error: String? }
+    private var cliPending: [String: (CliSendResult) -> Void] = [:]
+    private var cliPins: [String: String] = [:]
+
+    func devicesForCLI() -> [[String: Any]] {
+        availableDevices.map { ["name": $0.name, "id": $0.id, "type": $0.type.rawValue, "trusted": isTrusted($0.name)] }
+    }
+
+    func transfersForCLI() -> [[String: Any]] {
+        transfers.map {
+            ["title": $0.title, "device": $0.deviceName, "percent": Int($0.fraction * 100),
+             "phase": "\($0.phase)"]
+        }
+    }
+
+    /// Send files to a device by name (or id), invoking `completion` when the
+    /// transfer finishes. Reuses the normal send flow so the GUI reflects it.
+    func cliSend(paths: [String], to name: String, completion: @escaping (CliSendResult) -> Void) {
+        guard let device = discoveredDevices.first(where: { $0.name == name || $0.id == name }) else {
+            completion(CliSendResult(ok: false, pin: nil, error: "device_not_found")); return
+        }
+        let files = paths.compactMap { p -> FileItem? in
+            let url = URL(fileURLWithPath: (p as NSString).expandingTildeInPath)
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { Int64($0) } ?? 0
+            return FileItem(url: url, sizeBytes: size)
+        }
+        guard !files.isEmpty else { completion(CliSendResult(ok: false, pin: nil, error: "no_readable_files")); return }
+        cliPending[device.id] = completion
+        stagedFiles = files
+        connection = .connecting(device)
+        service.sendFiles(files, to: device)
+        scheduleConnectTimeout(for: device)
+    }
+
+    private func finishCli(_ deviceID: String, ok: Bool, error: String?) {
+        guard let completion = cliPending.removeValue(forKey: deviceID) else { return }
+        completion(CliSendResult(ok: ok, pin: cliPins.removeValue(forKey: deviceID), error: error))
     }
 
     /// Devices currently reachable, trusted ones first.
@@ -258,6 +304,7 @@ final class AppModel: ObservableObject {
                                deviceName: device.name, title: "Couldn’t connect",
                                totalBytes: 0, phase: .failed("No response — try again")),
                 at: 0)
+            self.finishCli(device.id, ok: false, error: "timeout")
         }
     }
 
@@ -329,10 +376,12 @@ extension AppModel: QuickShareServiceDelegate {
 
     func serviceDidEstablishConnection(with device: RemoteDevice, pin: String) {
         connection = .awaitingConsent(device, pin: pin)
+        if cliPending[device.id] != nil { cliPins[device.id] = pin }
     }
 
     func serviceDidFailConnection(with device: RemoteDevice, error: String) {
         if connection.device?.id == device.id { connection = .idle }
+        finishCli(device.id, ok: false, error: error)
     }
 
     func serviceDidAcceptTransfer(id: String) {
@@ -366,6 +415,7 @@ extension AppModel: QuickShareServiceDelegate {
             if error == nil { transfers[i].fraction = 1.0 }
         }
         if connection.device?.id == id { connection = .idle; stagedFiles = [] }
+        finishCli(id, ok: error == nil, error: error)
     }
 
     func serviceDidResolveFiles(id: String, files: [TransferFile]) {
