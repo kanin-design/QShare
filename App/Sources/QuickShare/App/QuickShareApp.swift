@@ -11,10 +11,10 @@ struct QuickShareApp: App {
             RootView()
                 .environmentObject(model)
                 .frame(minWidth: 440, idealWidth: 460, maxWidth: 560,
-                       minHeight: 600, idealHeight: 680)
+                       minHeight: 560, idealHeight: 700, maxHeight: 900)
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)   // fixed-ish height; content scrolls
 
         // Menu-bar presence: usable without the window in front.
         MenuBarExtra {

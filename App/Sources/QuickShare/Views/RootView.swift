@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// App shell: header, Send/Receive switch, the active flow, and a shared list of
 /// active transfers. Incoming requests are presented as a global sheet so they
@@ -9,25 +10,31 @@ struct RootView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            modePicker
+                .padding(.horizontal, Theme.Space.lg)
+                .padding(.bottom, Theme.Space.md)
 
-            VStack(alignment: .leading, spacing: Theme.Space.lg) {
-                modePicker
+            // Only the content scrolls; header + tabs stay put. Hidden indicators
+            // so there's no visible scrollbar.
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                    Group {
+                        switch model.mode {
+                        case .send:    SendView()
+                        case .receive: ReceiveView()
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: model.mode)
 
-                Group {
-                    switch model.mode {
-                    case .send:    SendView()
-                    case .receive: ReceiveView()
+                    if !model.transfers.isEmpty {
+                        transfersSection
                     }
                 }
-                .animation(.easeInOut(duration: 0.2), value: model.mode)
-
-                if !model.transfers.isEmpty {
-                    transfersSection
-                }
+                .padding(.horizontal, Theme.Space.lg)
+                .padding(.bottom, Theme.Space.lg)
+                .background(ScrollerHider())   // no legacy scrollbar even on "always show"
             }
-            .padding(Theme.Space.lg)
-
-            Spacer(minLength: 0)
+            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
@@ -125,5 +132,26 @@ struct ModeToggle: View {
         .overlay(
             Capsule(style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
         )
+    }
+}
+
+/// Forces the enclosing NSScrollView to use overlay (auto-hiding) scrollers and
+/// hides them, so no persistent scrollbar shows even when the system is set to
+/// "always show scroll bars".
+private struct ScrollerHider: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async { Self.configure(v) }
+        return v
+    }
+    func updateNSView(_ v: NSView, context: Context) {
+        DispatchQueue.main.async { Self.configure(v) }
+    }
+    private static func configure(_ v: NSView) {
+        guard let sv = v.enclosingScrollView else { return }
+        sv.scrollerStyle = .overlay
+        sv.autohidesScrollers = true
+        sv.hasVerticalScroller = false
+        sv.hasHorizontalScroller = false
     }
 }
