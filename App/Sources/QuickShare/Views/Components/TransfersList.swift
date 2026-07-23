@@ -8,8 +8,17 @@ private struct ScrollMetrics: Equatable {
     var container: CGFloat = 0
 }
 
-/// The transfers history: one chronological (newest-first) scrollable list with a
-/// custom liquid-glass scrollbar. Header + Clear stay fixed; only the rows scroll.
+/// Natural height of the rows, measured independently of the scroll viewport so
+/// the panel can size itself to its content (and only scroll past a cap).
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// The transfers history: ONE glass panel (squircle) divided by hairlines into
+/// chronological (newest-first) rows. The panel grows with the number of
+/// transfers and only starts scrolling — with a custom liquid-glass scrollbar —
+/// once it would exceed the space available below the controls.
 struct TransfersList: View {
     let transfers: [ActiveTransfer]
     let onClear: () -> Void
@@ -17,6 +26,9 @@ struct TransfersList: View {
 
     @State private var metrics = ScrollMetrics()
     @State private var scrollPos = ScrollPosition(edge: .top)
+    @State private var contentHeight: CGFloat = 0
+
+    private var scrollable: Bool { metrics.content - metrics.container > 1 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
@@ -27,29 +39,49 @@ struct TransfersList: View {
                     .foregroundStyle(Theme.accent)
             ))
 
-            ScrollView {
-                LazyVStack(spacing: 6) {
-                    ForEach(transfers) { t in
-                        TransferRow(transfer: t) { onCancel(t) }
+            GeometryReader { geo in
+                // Fit content when it's short; cap at the available height and scroll otherwise.
+                let panelH = contentHeight <= 0 ? geo.size.height : min(contentHeight, geo.size.height)
+
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(transfers.enumerated()), id: \.element.id) { idx, t in
+                            TransferRow(transfer: t) { onCancel(t) }
+                            if idx < transfers.count - 1 {
+                                Divider()
+                                    .overlay(Theme.hairline)
+                                    .padding(.leading, 40)   // align under the filename
+                            }
+                        }
+                    }
+                    .background(ScrollerHider())   // suppress native scroller + its background
+                    .background(GeometryReader { g in
+                        Color.clear.preference(key: ContentHeightKey.self, value: g.size.height)
+                    })
+                }
+                .frame(height: panelH)
+                .scrollPosition($scrollPos)
+                .scrollIndicators(.hidden)
+                .onScrollGeometryChange(for: ScrollMetrics.self) { geo in
+                    ScrollMetrics(offset: geo.contentOffset.y,
+                                  content: geo.contentSize.height,
+                                  container: geo.containerSize.height)
+                } action: { _, new in metrics = new }
+                .glassSurface(radius: Theme.Radius.card)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+                .overlay(alignment: .trailing) {
+                    if scrollable {
+                        GlassScrollbar(offset: metrics.offset,
+                                       content: metrics.content,
+                                       container: metrics.container) { y in
+                            scrollPos.scrollTo(y: y)
+                        }
+                        .frame(height: panelH)
+                        .padding(.trailing, 3)
                     }
                 }
-                .padding(.trailing, 12)   // clearance for the scrollbar
-                .background(ScrollerHider())   // suppress the native (legacy) scrollbar
             }
-            .scrollPosition($scrollPos)
-            .scrollIndicators(.hidden)
-            .onScrollGeometryChange(for: ScrollMetrics.self) { geo in
-                ScrollMetrics(offset: geo.contentOffset.y,
-                              content: geo.contentSize.height,
-                              container: geo.containerSize.height)
-            } action: { _, new in metrics = new }
-            .overlay(alignment: .trailing) {
-                GlassScrollbar(offset: metrics.offset,
-                               content: metrics.content,
-                               container: metrics.container) { y in
-                    scrollPos.scrollTo(y: y)
-                }
-            }
+            .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
         }
     }
 }
@@ -68,7 +100,7 @@ struct GlassScrollbar: View {
 
     var body: some View {
         GeometryReader { geo in
-            let trackH = geo.size.height
+            let trackH = geo.size.height - 8            // small inset top/bottom
             let thumbH = max(32, trackH * (container / max(content, 1)))
             let maxThumbY = max(trackH - thumbH, 0)
             let thumbY = scrollable > 0 ? (offset / scrollable) * maxThumbY : 0
@@ -95,29 +127,33 @@ struct GlassScrollbar: View {
                     )
             }
             .frame(width: 12, height: trackH, alignment: .center)
+            .padding(.vertical, 4)
         }
         .frame(width: 12)
-        .opacity(scrollable > 1 ? 1 : 0)
-        .animation(.easeInOut(duration: 0.15), value: scrollable > 1)
     }
 }
 
-/// Forces the enclosing NSScrollView to overlay/auto-hide (and hide) its native
-/// scrollers, so no legacy scrollbar shows even on "always show scroll bars".
+/// Kills the native NSScrollView scrollers (and background) so only our glass
+/// panel + custom scrollbar show. Reapplies on every layout/window change because
+/// SwiftUI re-adds the scroller — and with the system set to "always show scroll
+/// bars", overlay/autohide are ignored, so `hasVerticalScroller = false` is the
+/// only thing that actually hides it and must be re-forced.
 struct ScrollerHider: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let v = NSView()
-        DispatchQueue.main.async { Self.configure(v) }
-        return v
-    }
-    func updateNSView(_ v: NSView, context: Context) {
-        DispatchQueue.main.async { Self.configure(v) }
-    }
-    private static func configure(_ v: NSView) {
-        guard let sv = v.enclosingScrollView else { return }
-        sv.scrollerStyle = .overlay
-        sv.autohidesScrollers = true
-        sv.hasVerticalScroller = false
-        sv.hasHorizontalScroller = false
+    func makeNSView(context: Context) -> HiderView { HiderView() }
+    func updateNSView(_ v: HiderView, context: Context) { v.apply() }
+
+    final class HiderView: NSView {
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); apply() }
+        override func viewDidMoveToSuperview() { super.viewDidMoveToSuperview(); apply() }
+        override func layout() { super.layout(); apply() }
+
+        func apply() {
+            guard let sv = enclosingScrollView else { return }
+            sv.scrollerStyle = .overlay
+            sv.autohidesScrollers = true
+            sv.hasVerticalScroller = false
+            sv.hasHorizontalScroller = false
+            sv.drawsBackground = false
+        }
     }
 }

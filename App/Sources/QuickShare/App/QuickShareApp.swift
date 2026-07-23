@@ -7,14 +7,15 @@ struct QuickShareApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("QShare", id: "main") {
+        // A single Window (not WindowGroup) so "Open" focuses the one window
+        // instead of spawning duplicates.
+        Window("QShare", id: "main") {
             RootView()
                 .environmentObject(model)
-                .frame(minWidth: 440, idealWidth: 460, maxWidth: 560,
-                       minHeight: 560, idealHeight: 700, maxHeight: 900)
+                .frame(minWidth: 420, idealWidth: 460, minHeight: 520, idealHeight: 700)
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentMinSize)   // fixed-ish height; content scrolls
+        .windowResizability(.contentMinSize)   // freely resizable; content fills + scrolls
 
         // Menu-bar presence: usable without the window in front.
         MenuBarExtra {

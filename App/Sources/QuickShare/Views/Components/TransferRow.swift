@@ -18,11 +18,11 @@ struct TransferRow: View {
         VStack(spacing: 0) {
             header
             if expanded {
-                Divider().padding(.leading, 38)
+                Divider().overlay(Theme.hairline).padding(.leading, 38)
                 fileList
             }
         }
-        .glassSurface(radius: Theme.Radius.control)
+        .contentShape(Rectangle())
     }
 
     // MARK: Header (~40pt)
