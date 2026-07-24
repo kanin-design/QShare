@@ -82,73 +82,57 @@ struct RootView: View {
 
 }
 
-/// Send/Receive switch: a recessed track with a spring-animated liquid-glass
-/// thumb under the selected segment. Hovering an inactive segment brightens its
-/// label and shows a faint fill, so the whole control feels alive to the mouse.
+/// Send/Receive switch: two segments with a single Apple Liquid-Glass pill that
+/// morphs across to the selected one (GlassEffectContainer + glassEffectID).
 struct ModeToggle: View {
     @Binding var selection: AppMode
-    @Namespace private var ns
+    @Namespace private var glass
     @State private var hovered: AppMode?
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(AppMode.allCases) { mode in
-                segment(mode)
+        GlassEffectContainer(spacing: 4) {
+            HStack(spacing: 4) {
+                ForEach(AppMode.allCases) { mode in
+                    segment(mode)
+                }
             }
         }
         .padding(4)
         .background(
-            Capsule(style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-                .overlay(Capsule(style: .continuous).strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
+            Capsule(style: .continuous).fill(Color.primary.opacity(0.05))
         )
     }
 
+    @ViewBuilder
     private func segment(_ mode: AppMode) -> some View {
         let isOn = selection == mode
         let isHover = hovered == mode && !isOn
 
-        return Text(mode.rawValue)
+        let label = Text(mode.rawValue)
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(isOn || isHover ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background {
-                if isOn {
-                    glassThumb.matchedGeometryEffect(id: "thumb", in: ns)
-                } else if isHover {
-                    Capsule(style: .continuous).fill(Color.primary.opacity(0.06))
-                }
-            }
+            .padding(.vertical, 9)
             .contentShape(Capsule(style: .continuous))
-            .onHover { inside in
-                withAnimation(.easeOut(duration: 0.15)) {
-                    if inside { hovered = mode }
-                    else if hovered == mode { hovered = nil }
+
+        Group {
+            if isOn {
+                // The real Liquid-Glass pill — morphs to whichever segment is on.
+                label.glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+                    .glassEffectID("pill", in: glass)
+            } else {
+                label.background {
+                    if isHover { Capsule(style: .continuous).fill(Color.primary.opacity(0.06)) }
                 }
             }
-            .onTapGesture {
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) { selection = mode }
+        }
+        .onHover { inside in
+            withAnimation(.easeOut(duration: 0.15)) {
+                if inside { hovered = mode } else if hovered == mode { hovered = nil }
             }
-    }
-
-    /// A real liquid-glass pill: material base, a soft top-down sheen, a bright
-    /// top rim, and a layered drop shadow so it reads as a floating pane.
-    private var glassThumb: some View {
-        Capsule(style: .continuous)
-            .fill(.regularMaterial)
-            .overlay(
-                Capsule(style: .continuous)
-                    .fill(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.03)],
-                                         startPoint: .top, endPoint: .bottom))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.10)],
-                                                 startPoint: .top, endPoint: .bottom),
-                                  lineWidth: 0.6)
-            )
-            .shadow(color: .black.opacity(0.22), radius: 5, y: 2)
-            .shadow(color: .black.opacity(0.10), radius: 1, y: 0.5)
+        }
+        .onTapGesture {
+            withAnimation(.smooth(duration: 0.32)) { selection = mode }
+        }
     }
 }

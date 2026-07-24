@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "QuickShare",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS("26.0")],   // real Liquid Glass (glassEffect) needs macOS 26
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.21.0"),
         .package(url: "https://github.com/leif-ibsen/SwiftECC", from: "3.5.0"),
