@@ -82,57 +82,56 @@ struct RootView: View {
 
 }
 
-/// Send/Receive switch: two segments with a single Apple Liquid-Glass pill that
-/// morphs across to the selected one (GlassEffectContainer + glassEffectID).
+/// Send/Receive switch: a single Apple Liquid-Glass pill that physically slides
+/// under the selected segment and springs into place like a magnet snap.
 struct ModeToggle: View {
     @Binding var selection: AppMode
-    @Namespace private var glass
     @State private var hovered: AppMode?
 
+    private static let modes = AppMode.allCases
+    private static let spacing: CGFloat = 6
+
     var body: some View {
-        GlassEffectContainer(spacing: 4) {
-            HStack(spacing: 4) {
-                ForEach(AppMode.allCases) { mode in
-                    segment(mode)
-                }
+        HStack(spacing: Self.spacing) {
+            ForEach(Self.modes) { mode in
+                segment(mode)
+            }
+        }
+        // A single glass pill in the background, slid to the selected segment.
+        .background(alignment: .leading) {
+            GeometryReader { geo in
+                let n = CGFloat(Self.modes.count)
+                let w = (geo.size.width - Self.spacing * (n - 1)) / n
+                let idx = CGFloat(Self.modes.firstIndex(of: selection) ?? 0)
+                Capsule(style: .continuous)
+                    .fill(.clear)
+                    .glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
+                    .frame(width: w, height: geo.size.height)
+                    .offset(x: idx * (w + Self.spacing))
             }
         }
         .padding(4)
-        .background(
-            Capsule(style: .continuous).fill(Color.primary.opacity(0.05))
-        )
+        .background(Capsule(style: .continuous).fill(Color.primary.opacity(0.05)))
     }
 
-    @ViewBuilder
     private func segment(_ mode: AppMode) -> some View {
         let isOn = selection == mode
         let isHover = hovered == mode && !isOn
 
-        let label = Text(mode.rawValue)
+        return Text(mode.rawValue)
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(isOn || isHover ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
             .contentShape(Capsule(style: .continuous))
-
-        Group {
-            if isOn {
-                // The real Liquid-Glass pill — morphs to whichever segment is on.
-                label.glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
-                    .glassEffectID("pill", in: glass)
-            } else {
-                label.background {
-                    if isHover { Capsule(style: .continuous).fill(Color.primary.opacity(0.06)) }
+            .onHover { inside in
+                withAnimation(.easeOut(duration: 0.15)) {
+                    if inside { hovered = mode } else if hovered == mode { hovered = nil }
                 }
             }
-        }
-        .onHover { inside in
-            withAnimation(.easeOut(duration: 0.15)) {
-                if inside { hovered = mode } else if hovered == mode { hovered = nil }
+            .onTapGesture {
+                // Snappy spring with a touch of overshoot — the "magnet" settle.
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.68)) { selection = mode }
             }
-        }
-        .onTapGesture {
-            withAnimation(.smooth(duration: 0.32)) { selection = mode }
-        }
     }
 }
