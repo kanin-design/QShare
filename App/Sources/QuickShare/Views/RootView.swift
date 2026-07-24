@@ -120,9 +120,15 @@ struct ModeToggle: View {
 
         return Text(mode.rawValue)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(isOn || isHover ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+            .foregroundStyle(isOn ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
+            // Hover shows a faint fill (like the list rows), not a color change.
+            .background {
+                if isHover {
+                    Capsule(style: .continuous).fill(Color.primary.opacity(0.06))
+                }
+            }
             .contentShape(Capsule(style: .continuous))
             .onHover { inside in
                 withAnimation(.easeOut(duration: 0.15)) {
