@@ -52,6 +52,7 @@ struct TransfersList: View {
                         }
                     }
                     .padding(Theme.Space.xs)
+                    .padding(.trailing, scrollable ? 12 : 0)   // clear the scrollbar
                     .background(ScrollerHider())   // suppress native scroller + its background
                     .background(GeometryReader { g in
                         Color.clear.preference(key: ContentHeightKey.self, value: g.size.height)
