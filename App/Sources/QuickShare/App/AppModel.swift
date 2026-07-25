@@ -67,17 +67,34 @@ final class AppModel: ObservableObject {
     // Both
     @Published var transfers: [ActiveTransfer] = []
 
-    /// Device names the user chose to auto-accept from (persisted).
-    @Published var trustedDevices: [String] = []
-    private let trustKey = "trustedDeviceNames"
+    /// Names of devices we've accepted from before (persisted).
+    ///
+    /// This is a *convenience hint only* — it surfaces "you've accepted from this
+    /// name before" on the incoming prompt. It deliberately does not auto-accept.
+    ///
+    /// Quick Share gives us no stable device identity to key trust on: the UKEY2
+    /// keys are freshly generated per handshake, and the paired-key/certificate
+    /// frames that would carry a persistent identity are stubbed out in the
+    /// vendored engine (it answers `pairedKeyResult = .unable`). The device name
+    /// is remote-supplied and unauthenticated, so auto-accepting on it would let
+    /// anything on the LAN write to the receive folder just by claiming the name.
+    @Published var knownDevices: [String] = []
+    private let knownKey = "knownDeviceNames"
+    /// Superseded by `knownKey`; cleared on launch so no one keeps an
+    /// auto-accept list that used to bypass the prompt.
+    private let legacyTrustKey = "trustedDeviceNames"
 
     // Settings (persisted)
     @Published var downloadDirectory: URL = AppModel.defaultDownloadDirectory()
     @Published var startVisible: Bool = false
     @Published var appearance: AppAppearance = .system
+    /// Localhost control API for the `qshare` CLI. Off by default: it can read
+    /// any path the user can and push it to a nearby device, so it's opt-in.
+    @Published var controlAPIEnabled: Bool = false
     private let downloadDirKey = "downloadDirectoryPath"
     private let startVisibleKey = "startVisible"
     private let appearanceKey = "appearance"
+    private let controlAPIKey = "controlAPIEnabled"
 
     private let service: QuickShareService
 
@@ -90,21 +107,29 @@ final class AppModel: ObservableObject {
         } else {
             self.service = NearbyQuickShareService()
         }
-        self.trustedDevices = UserDefaults.standard.stringArray(forKey: trustKey) ?? []
-        if let path = UserDefaults.standard.string(forKey: downloadDirKey) {
+        // Migrate off the old name-keyed auto-accept list. Those entries used to
+        // bypass the prompt entirely, so they are carried over as display-only
+        // "known" names and the old key is removed.
+        let defaults = UserDefaults.standard
+        if let legacy = defaults.stringArray(forKey: legacyTrustKey) {
+            let merged = (defaults.stringArray(forKey: knownKey) ?? []) + legacy
+            defaults.set(Array(Set(merged)).sorted(), forKey: knownKey)
+            defaults.removeObject(forKey: legacyTrustKey)
+        }
+        self.knownDevices = defaults.stringArray(forKey: knownKey) ?? []
+        if let path = defaults.string(forKey: downloadDirKey) {
             self.downloadDirectory = URL(fileURLWithPath: path)
         }
-        self.startVisible = UserDefaults.standard.bool(forKey: startVisibleKey)
-        if let a = UserDefaults.standard.string(forKey: appearanceKey),
+        self.startVisible = defaults.bool(forKey: startVisibleKey)
+        self.controlAPIEnabled = defaults.bool(forKey: controlAPIKey)
+        if let a = defaults.string(forKey: appearanceKey),
            let parsed = AppAppearance(rawValue: a) { self.appearance = parsed }
         self.service.delegate = self
         self.service.setReceiveDirectory(downloadDirectory)
         if startVisible { self.service.startAdvertising(deviceName: deviceName) }
         // Discover continuously so the menu-bar list is always current.
         self.service.startDiscovery()
-        // Localhost control API for the `qshare` CLI / automation.
-        self.controlServer = ControlServer(model: self)
-        self.controlServer?.start()
+        if controlAPIEnabled { startControlServer() }
 
         if ProcessInfo.processInfo.environment["QS_MOCK"] != nil {
             deviceName = "MacBook Pro"   // neutral name for demo screenshots
@@ -160,7 +185,7 @@ final class AppModel: ObservableObject {
     private var cliPins: [String: String] = [:]
 
     func devicesForCLI() -> [[String: Any]] {
-        availableDevices.map { ["name": $0.name, "id": $0.id, "type": $0.type.rawValue, "trusted": isTrusted($0.name)] }
+        availableDevices.map { ["name": $0.name, "id": $0.id, "type": $0.type.rawValue, "known": isKnown($0.name)] }
     }
 
     func transfersForCLI() -> [[String: Any]] {
@@ -173,6 +198,12 @@ final class AppModel: ObservableObject {
     /// Send files to a device by name (or id), invoking `completion` when the
     /// transfer finishes. Reuses the normal send flow so the GUI reflects it.
     func cliSend(paths: [String], to name: String, completion: @escaping (CliSendResult) -> Void) {
+        // The send flow is single-slot and shares its state with the window, so a
+        // CLI send while the user is mid-flow would silently discard their staged
+        // files. Refuse instead of clobbering.
+        guard case .idle = connection, cliPending.isEmpty else {
+            completion(CliSendResult(ok: false, pin: nil, error: "busy")); return
+        }
         guard let device = discoveredDevices.first(where: { $0.name == name || $0.id == name }) else {
             completion(CliSendResult(ok: false, pin: nil, error: "device_not_found")); return
         }
@@ -195,10 +226,23 @@ final class AppModel: ObservableObject {
         completion(CliSendResult(ok: ok, pin: cliPins.removeValue(forKey: deviceID), error: error))
     }
 
-    /// Devices currently reachable, trusted ones first.
+    /// Release every parked CLI request (used when the control API is switched
+    /// off mid-flight, so no HTTP client is left hanging).
+    private func failAllPendingCli(error: String) {
+        let pending = cliPending
+        cliPending.removeAll()
+        cliPins.removeAll()
+        for (_, completion) in pending {
+            completion(CliSendResult(ok: false, pin: nil, error: error))
+        }
+    }
+
+    /// Devices currently reachable, previously-seen ones first. Sorted by name
+    /// within each group so the list has a stable order (`sorted` is not stable,
+    /// so ranking alone let equal-rank rows shuffle between renders).
     var availableDevices: [RemoteDevice] {
         discoveredDevices.sorted {
-            isTrusted($0.name) && !isTrusted($1.name)
+            isKnown($0.name) == isKnown($1.name) ? $0.name < $1.name : isKnown($0.name)
         }
     }
 
@@ -221,6 +265,26 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.set(on, forKey: startVisibleKey)
     }
 
+    func setControlAPIEnabled(_ on: Bool) {
+        controlAPIEnabled = on
+        UserDefaults.standard.set(on, forKey: controlAPIKey)
+        if on {
+            startControlServer()
+        } else {
+            controlServer?.stop()
+            controlServer = nil
+            // Any CLI request still parked on a completion would otherwise hang.
+            failAllPendingCli(error: "control_api_disabled")
+        }
+    }
+
+    private func startControlServer() {
+        guard controlServer == nil else { return }
+        let server = ControlServer(model: self)
+        controlServer = server
+        server.start()
+    }
+
     func setAppearance(_ a: AppAppearance) {
         appearance = a
         UserDefaults.standard.set(a.rawValue, forKey: appearanceKey)
@@ -238,23 +302,23 @@ final class AppModel: ObservableObject {
         return isVisible ? "arrow.2.circlepath.circle.fill" : "arrow.2.circlepath"
     }
 
-    // MARK: Trusted devices
+    // MARK: Known devices (display hint only — never an accept decision)
 
-    func isTrusted(_ name: String) -> Bool { trustedDevices.contains(name) }
+    func isKnown(_ name: String) -> Bool { knownDevices.contains(name) }
 
-    func trust(_ name: String) {
-        guard !isTrusted(name) else { return }
-        trustedDevices.append(name)
-        persistTrust()
+    func remember(_ name: String) {
+        guard !isKnown(name) else { return }
+        knownDevices.append(name)
+        persistKnown()
     }
 
-    func untrust(_ name: String) {
-        trustedDevices.removeAll { $0 == name }
-        persistTrust()
+    func forget(_ name: String) {
+        knownDevices.removeAll { $0 == name }
+        persistKnown()
     }
 
-    private func persistTrust() {
-        UserDefaults.standard.set(trustedDevices, forKey: trustKey)
+    private func persistKnown() {
+        UserDefaults.standard.set(knownDevices, forKey: knownKey)
     }
 
     // MARK: Intents — Receive
@@ -263,10 +327,10 @@ final class AppModel: ObservableObject {
         isVisible ? service.stopAdvertising() : service.startAdvertising(deviceName: deviceName)
     }
 
-    func respondToIncoming(accept: Bool, trustDevice: Bool = false) {
+    func respondToIncoming(accept: Bool) {
         guard let req = incomingRequest else { return }
         if accept {
-            if trustDevice { trust(req.device.name) }
+            remember(req.device.name)
             acceptIncoming(req)
         } else {
             service.respondToIncoming(id: req.id, accept: false)
@@ -274,8 +338,7 @@ final class AppModel: ObservableObject {
         incomingRequest = nil
     }
 
-    /// Accept a request and create its transfer row (shared by manual and
-    /// trusted-device auto-accept).
+    /// Accept a request and create its transfer row.
     private func acceptIncoming(_ req: IncomingRequest) {
         service.respondToIncoming(id: req.id, accept: true)
         transfers.insert(
@@ -331,16 +394,19 @@ final class AppModel: ObservableObject {
         scheduleConnectTimeout(for: device)
     }
 
-    private var connectToken = 0
+    /// One token per device — a shared counter meant a second send silently
+    /// invalidated the first one's timeout, leaving it to hang forever.
+    private var connectTokens: [String: Int] = [:]
 
     /// If the handshake doesn't produce a PIN within a few seconds, the connect
     /// failed (device moved on / unreachable). Don't hang — fail cleanly.
     private func scheduleConnectTimeout(for device: RemoteDevice) {
-        connectToken += 1
-        let token = connectToken
+        let token = (connectTokens[device.id] ?? 0) + 1
+        connectTokens[device.id] = token
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
-            guard let self, token == self.connectToken,
+            guard let self, token == self.connectTokens[device.id],
                   case .connecting(let d) = self.connection, d.id == device.id else { return }
+            self.connectTokens[device.id] = nil
             self.service.cancelTransfer(id: device.id)
             self.connection = .idle
             self.stagedFiles = []
@@ -393,12 +459,12 @@ extension AppModel: QuickShareServiceDelegate {
     }
 
     func serviceDidReceiveIncomingRequest(_ request: IncomingRequest) {
-        if isTrusted(request.device.name) {
-            acceptIncoming(request)   // remembered device → accept automatically
-        } else {
-            incomingRequest = request
-            NSApp.activate(ignoringOtherApps: true)   // surface the prompt
-        }
+        // Always ask. The sender's name is unauthenticated, so there is nothing
+        // here we could safely auto-accept on — see `knownDevices`.
+        incomingRequest = request
+        // `NSApp` is an implicitly-unwrapped global that is nil outside a running
+        // GUI app. This path is driven by network input, so don't force it.
+        if let app = NSApp { app.activate(ignoringOtherApps: true) }   // surface the prompt
     }
 
     func serviceDidDiscover(_ device: RemoteDevice) {

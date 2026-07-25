@@ -174,12 +174,16 @@ public protocol MainAppDelegate{
 	func incomingTransfer(id:String, progress:Double)
 	// QuickShare2 addition — where the received files were saved on disk.
 	func incomingTransfer(id:String, savedFiles:[URL])
+	// QuickShare2 addition — real advertising state (mDNS actually published or
+	// torn down), so the UI never claims to be visible when it isn't.
+	func visibilityDidChange(isVisible:Bool)
 }
 
 // Default no-ops keep the added hooks optional for adopters.
 public extension MainAppDelegate{
 	func incomingTransfer(id:String, progress:Double){}
 	func incomingTransfer(id:String, savedFiles:[URL]){}
+	func visibilityDidChange(isVisible:Bool){}
 }
 
 public protocol ShareExtensionDelegate:AnyObject{
@@ -195,7 +199,15 @@ public protocol ShareExtensionDelegate:AnyObject{
 
 public class NearbyConnectionManager : NSObject, NetServiceDelegate, InboundNearbyConnectionDelegate, OutboundNearbyConnectionDelegate{
 	
-	private var tcpListener:NWListener;
+	// QuickShare2: optional + recreated per visibility session. A cancelled
+	// NWListener can never be restarted, and creation itself can fail, so the
+	// manager must be able to hold "no listener" without crashing.
+	private var tcpListener:NWListener?
+	// QuickShare2: set when the listener has been cancelled, so becomeVisible()
+	// knows to build a fresh one. cancel() is asynchronous — polling
+	// `tcpListener.state` races a fast off→on toggle and can restart a
+	// cancelling listener.
+	private var listenerIsStale=false
 	public let endpointID:[UInt8]=generateEndpointID()
 	private var mdnsService:NetService?
 	private var activeConnections:[String:InboundNearbyConnection]=[:]
@@ -216,43 +228,103 @@ public class NearbyConnectionManager : NSObject, NetServiceDelegate, InboundNear
 	public static let shared=NearbyConnectionManager()
 
 	// QuickShare2 addition — where received files are saved (nil → ~/Downloads).
-	public static var receiveDirectory:URL?
-	
+	// Written from the main actor (Settings), read on the connection queue, so
+	// the storage is lock-protected rather than a bare static var.
+	private static let receiveDirectoryLock=NSLock()
+	private static var _receiveDirectory:URL?
+	public static var receiveDirectory:URL?{
+		get{
+			receiveDirectoryLock.lock()
+			defer{ receiveDirectoryLock.unlock() }
+			return _receiveDirectory
+		}
+		set{
+			receiveDirectoryLock.lock()
+			_receiveDirectory=newValue
+			receiveDirectoryLock.unlock()
+		}
+	}
+
 	override init() {
-		tcpListener=try! NWListener(using: NWParameters(tls: .none))
 		super.init()
 	}
-	
+
 	public func becomeVisible(){
-		// A cancelled NWListener can't be restarted, so make a fresh one each
-		// time we go visible. (QuickShare2: upstream never stops the listener.)
-		if case .cancelled = tcpListener.state {
-			tcpListener=try! NWListener(using: NWParameters(tls: .none))
+		// Starting an already-started NWListener is invalid, and visibility is now
+		// reported asynchronously (only once mDNS publishes), so the caller can
+		// legitimately ask twice before the first attempt resolves.
+		guard !advertisingRequested else {return}
+		advertisingRequested=true
+		// Build a fresh listener whenever the previous one was cancelled. Driven
+		// by an explicit flag, not by reading the (asynchronously updated) state.
+		if tcpListener==nil || listenerIsStale{
+			guard let fresh=try? NWListener(using: NWParameters(tls: .none)) else{
+				NSLog("QShare: could not create the incoming-transfer listener")
+				advertisingRequested=false
+				reportVisibility(false)
+				return
+			}
+			tcpListener=fresh
+			listenerIsStale=false
 		}
 		startTCPListener()
 	}
 
 	// QuickShare2 addition — stop advertising and tear down the listener.
 	public func becomeInvisible(){
-		mdnsService?.stop()
-		mdnsService=nil
-		tcpListener.cancel()
-	}
-	
-	private func startTCPListener(){
-		tcpListener.stateUpdateHandler={(state:NWListener.State) in
-			if case .ready = state {
-				self.initMDNS()
+		advertisingRequested=false
+		// `mdnsService` is owned by the main run loop (see initMDNS).
+		if Thread.isMainThread{
+			mdnsService?.stop()
+			mdnsService=nil
+		}else{
+			DispatchQueue.main.async{ [weak self] in
+				self?.mdnsService?.stop()
+				self?.mdnsService=nil
 			}
 		}
-		tcpListener.newConnectionHandler={(connection:NWConnection) in
+		tcpListener?.cancel()
+		listenerIsStale=true
+		reportVisibility(false)
+	}
+
+	// QuickShare2 addition — the app's visibility switch must reflect whether we
+	// are *actually* advertising, not merely that advertising was requested.
+	private var advertisingRequested=false
+	private var reportedVisible=false
+	private func reportVisibility(_ visible:Bool){
+		guard reportedVisible != visible else {return}
+		reportedVisible=visible
+		mainAppDelegate?.visibilityDidChange(isVisible: visible)
+	}
+
+	private func startTCPListener(){
+		guard let listener=tcpListener else {return}
+		listener.stateUpdateHandler={[weak self] (state:NWListener.State) in
+			guard let self else {return}
+			switch state{
+			case .ready:
+				self.initMDNS()
+			case .failed(let error):
+				// QuickShare2: previously unhandled — the app would keep claiming
+				// to be visible while nothing was listening.
+				NSLog("QShare: incoming-transfer listener failed: \(error)")
+				self.listenerIsStale=true
+				self.reportVisibility(false)
+			case .cancelled:
+				self.reportVisibility(false)
+			default:
+				break
+			}
+		}
+		listener.newConnectionHandler={(connection:NWConnection) in
 			let id=UUID().uuidString
 			let conn=InboundNearbyConnection(connection: connection, id: id)
 			self.activeConnections[id]=conn
 			conn.delegate=self
 			conn.start()
 		}
-		tcpListener.start(queue: .global(qos: .utility))
+		listener.start(queue: .global(qos: .utility))
 	}
 	
 	private static func generateEndpointID()->[UInt8]{
@@ -265,6 +337,20 @@ public class NearbyConnectionManager : NSObject, NetServiceDelegate, InboundNear
 	}
 	
 	private func initMDNS(){
+		guard let port32=tcpListener?.port.map({Int32($0.rawValue)}) else{
+			NSLog("QShare: listener has no port; cannot advertise")
+			reportVisibility(false)
+			return
+		}
+		// QuickShare2: NetService delivers its delegate callbacks on the run loop
+		// it was scheduled on, and this is called from the NWListener state
+		// handler — a dispatch queue with no run loop. Publishing from here left
+		// didPublish/didNotPublish permanently unfired. Hop to the main run loop,
+		// which is also the only thread that touches `mdnsService`.
+		guard Thread.isMainThread else{
+			DispatchQueue.main.async{ [weak self] in self?.initMDNS() }
+			return
+		}
 		let nameBytes:[UInt8]=[
 			0x23, // PCP
 			endpointID[0], endpointID[1], endpointID[2], endpointID[3],
@@ -272,9 +358,10 @@ public class NearbyConnectionManager : NSObject, NetServiceDelegate, InboundNear
 			0, 0
 		]
 		let name=Data(nameBytes).urlSafeBase64EncodedString()
-		let endpointInfo=EndpointInfo(name: Host.current().localizedName!, deviceType: .computer)
-		
-		let port:Int32=Int32(tcpListener.port!.rawValue)
+		// QuickShare2: localizedName is optional; don't crash when it's absent.
+		let endpointInfo=EndpointInfo(name: Host.current().localizedName ?? "Mac", deviceType: .computer)
+
+		let port:Int32=port32
 		mdnsService=NetService(domain: "", type: "_FC9F5ED42C8A._tcp.", name: name, port: port)
 		mdnsService?.delegate=self
 		mdnsService?.setTXTRecord(NetService.data(fromTXTRecord: [
@@ -282,7 +369,24 @@ public class NearbyConnectionManager : NSObject, NetServiceDelegate, InboundNear
 		]))
 		mdnsService?.publish()
 	}
-	
+
+	// MARK: NetServiceDelegate (QuickShare2 — upstream declared the conformance
+	// but implemented none of it, so a failed publish was completely silent.)
+
+	public func netServiceDidPublish(_ sender: NetService) {
+		// Only now are we genuinely discoverable.
+		reportVisibility(true)
+	}
+
+	public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
+		NSLog("QShare: mDNS publish failed: \(errorDict)")
+		reportVisibility(false)
+	}
+
+	public func netServiceDidStop(_ sender: NetService) {
+		reportVisibility(false)
+	}
+
 	func obtainUserConsent(for transfer: TransferMetadata, from device: RemoteDeviceInfo, connection: InboundNearbyConnection) {
 		guard let delegate=mainAppDelegate else {return}
 		delegate.obtainUserConsent(for: transfer, from: device)

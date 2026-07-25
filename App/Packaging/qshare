@@ -32,20 +32,37 @@ EXIT CODES             0 ok · 1 failed/unreachable · 2 usage error
 NOTES
   * QShare.app must be running — it hosts the local API on 127.0.0.1:47821
     (loopback only; token at ~/.config/qshare/token).
-  * The receiver must accept the transfer (a PIN prompt) unless the device is
-    marked "trusted" in QShare, in which case it auto-accepts.
+  * The receiver must always accept the transfer (a PIN prompt on their device).
+  * Requires "Allow the qshare command line" to be ON in QShare > Settings >
+    Automation. It is off by default.
   * Full API + agent guide: docs/API.md in the QShare repo.
 EOF
 }
 
-api() { # method path [json-body]
+api() { # method path [json-body] — prints the body, exits non-zero on HTTP error
   local method="$1" path="$2" data="${3:-}"
   local token; token="$(cat "$TOKEN_FILE" 2>/dev/null || true)"
   [[ -n "$token" ]] || { echo "qshare: no token at $TOKEN_FILE — launch the QShare app once." >&2; exit 1; }
-  local args=(-s -m 600 -H "Authorization: Bearer $token")
-  [[ -n "$data" ]] && args+=(-X "$method" -H "Content-Type: application/json" -d "$data")
-  curl "${args[@]}" "$BASE$path" 2>/dev/null || {
-    echo "qshare: can't reach QShare on $BASE — is the app running?" >&2; exit 1; }
+  local args=(-s -m 600 -w '\n%{http_code}' -H "Authorization: Bearer $token")
+  if [[ -n "$data" ]]; then
+    args+=(-X "$method" -H "Content-Type: application/json" -d "$data")
+  fi
+  local raw
+  raw="$(curl "${args[@]}" "$BASE$path" 2>/dev/null)" || {
+    echo "qshare: can't reach QShare on $BASE — is the app running, and is" >&2
+    echo "       Settings > Automation > \"Allow the qshare command line\" on?" >&2
+    exit 1; }
+  local code="${raw##*$'\n'}" body="${raw%$'\n'*}"
+  # Report HTTP failures here rather than handing an error object to a parser
+  # that expects a list.
+  case "$code" in
+    # 502 is /send reporting a failed transfer — its body is structured
+    # {"ok":false,"error":…}, so the caller interprets it.
+    200|502) printf '%s\n' "$body" ;;
+    401) echo "qshare: token rejected — delete $TOKEN_FILE and relaunch QShare." >&2; exit 1 ;;
+    000) echo "qshare: no response from $BASE." >&2; exit 1 ;;
+    *)   echo "qshare: API returned HTTP $code: $body" >&2; exit 1 ;;
+  esac
 }
 
 cmd="${1:-}"
@@ -61,7 +78,7 @@ d=json.load(sys.stdin)
 if not d: print("No visible devices."); sys.exit()
 w=max(len(x["name"]) for x in d)
 for x in d:
-    print(f'"'"'{x["name"]:<{w}}  {x["type"]}{"  ★ trusted" if x.get("trusted") else ""}'"'"')'
+    print(f'"'"'{x["name"]:<{w}}  {x["type"]}{"  · seen before" if x.get("known") else ""}'"'"')'
     fi ;;
 
   status)

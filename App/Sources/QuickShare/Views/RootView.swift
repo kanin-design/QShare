@@ -50,7 +50,8 @@ struct RootView: View {
             if let req = model.incomingRequest {
                 IncomingRequestSheet(
                     request: req,
-                    onAccept: { trust in model.respondToIncoming(accept: true, trustDevice: trust) },
+                    isKnown: model.isKnown(req.device.name),
+                    onAccept: { model.respondToIncoming(accept: true) },
                     onDecline: { model.respondToIncoming(accept: false) })
             }
         }

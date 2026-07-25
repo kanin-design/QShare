@@ -13,7 +13,7 @@ import Security
 ///   GET  /health                           → {ok:true}
 @MainActor
 final class ControlServer {
-    static let port: UInt16 = 47821
+    nonisolated static let port: UInt16 = 47821
     private var listener: NWListener?
     private unowned let model: AppModel
     let token: String
@@ -41,6 +41,13 @@ final class ControlServer {
             MainActor.assumeIsolated { self?.receive(conn, buffer: Data()) }
         }
         l.start(queue: .main)
+    }
+
+    /// Tear the listener down (the API is user-toggleable). In-flight
+    /// connections are dropped; parked CLI sends are released by the caller.
+    func stop() {
+        listener?.cancel()
+        listener = nil
     }
 
     private static let maxRequestBytes = 256 * 1024
@@ -122,7 +129,8 @@ final class ControlServer {
     }
 
     /// Length-safe, constant-time string comparison (avoids token timing leaks).
-    static func constantTimeEqual(_ a: String, _ b: String) -> Bool {
+    /// Pure — `nonisolated` so it is callable (and testable) off the main actor.
+    nonisolated static func constantTimeEqual(_ a: String, _ b: String) -> Bool {
         let x = Array(a.utf8), y = Array(b.utf8)
         guard x.count == y.count else { return false }
         var diff: UInt8 = 0
@@ -148,7 +156,9 @@ final class ControlServer {
 }
 
 /// Minimal HTTP/1.1 request parser. Returns nil while the request is incomplete.
-private struct HTTPRequest {
+/// Internal rather than private so the parser can be tested directly — it is the
+/// component that reads untrusted bytes.
+struct HTTPRequest {
     let method: String, path: String
     let headers: [String: String]
     let body: Data

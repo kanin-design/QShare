@@ -16,8 +16,7 @@ struct MenuBarView: View {
                 Button {
                     sendTo(device)
                 } label: {
-                    Label(device.name,
-                          systemImage: model.isTrusted(device.name) ? "checkmark.shield.fill" : device.type.symbol)
+                    Label(device.name, systemImage: device.type.symbol)
                 }
             }
         }

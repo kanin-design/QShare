@@ -16,8 +16,8 @@ Views (SwiftUI)  ──observe──▶  AppModel (@MainActor, ObservableObject)
                                    │  intents (connect, sendFiles, respond…)
                                    ▼
                           QuickShareService  (protocol)
-                          ├── MockQuickShareService   ← ships today (simulated)
-                          └── NearbyQuickShareService ← wraps NearDrop (to build)
+                          ├── MockQuickShareService   ← QS_MOCK=1 (simulated)
+                          └── NearbyQuickShareService ← wraps NearDrop (default)
                                    │
                                    ▼ callbacks (QuickShareServiceDelegate, @MainActor)
                               back into AppModel
@@ -96,22 +96,48 @@ Kept minimal and marked `// QuickShare2` in `Sources/NearbyShareKit`:
   progress** hook (upstream only publishes a system `NSProgress` per file) and a
   **saved-file-URLs** hook so the app can open/reveal received files.
 - **Path-traversal fix**: remote-supplied file names are sanitized to a single
-  path component and destinations are confined to `~/Downloads` (upstream wrote
-  `downloads.appendingPathComponent(file.name)` with the raw remote name).
+  path component and destinations are confined to the configured receive
+  directory (upstream wrote `downloads.appendingPathComponent(file.name)` with
+  the raw remote name).
+- **Real visibility reporting**: `NetServiceDelegate` is actually implemented and
+  a `visibilityDidChange` hook reports advertising state, so the UI can't claim
+  to be visible when the listener failed or mDNS never published.
+- **Listener lifecycle**: teardown is tracked with an explicit flag rather than
+  polling the asynchronously-updated `NWListener.state`, and the listener is
+  optional so a failed creation degrades instead of trapping.
 - `NearbyConnectionManager.becomeInvisible()` + `becomeVisible()` listener
   recreation, so advertising can actually be toggled off and back on.
 
 ## Status / next
 
 Done: vendored engine (`NearbyShareKit`), `NearbyQuickShareService` wrapper,
-`.app` bundle with Bonjour + `NSLocalNetworkUsageDescription` (`Packaging/`).
+`.app` bundle with Bonjour + `NSLocalNetworkUsageDescription` (`Packaging/`),
+end-to-end verification against a real Android device, menu-bar item, transfer
+history, configurable receive location.
 
 Next:
-1. **Verify end-to-end** against a real Android device (send + receive).
-2. **Harden** the frame/protobuf parser (untrusted network input — see the
+1. **Harden** the frame/protobuf parser (untrusted network input — see the
    *Protocol Prying* paper and SafeBreach's Quick Share RCE writeup).
-3. **Grow UX:** menu-bar item, Finder share extension, transfer history,
-   configurable received-files location (currently ~/Downloads).
+2. **Finder share extension** as a second entry point.
+3. **Verifiable device identity.** Auto-accept is deliberately absent because
+   there is nothing to key it on — see *Device identity* below.
+
+## Device identity (why there is no auto-accept)
+
+Trust needs a name you can verify, and this implementation has none:
+
+- The UKEY2 ECDSA keys are generated per handshake
+  (`domain.makeKeyPair()` in `InboundNearbyConnection.processUkey2ClientInit`),
+  so a peer-key fingerprint changes every connection.
+- The paired-key frames that carry persistent identity in real Quick Share are
+  stubbed: NearDrop sends random bytes for `secretIDHash`/`signedData` and always
+  answers `pairedKeyResult = .unable`.
+- Inbound `RemoteDeviceInfo` carries no id at all — only the remote-supplied,
+  unauthenticated display name.
+
+So the app always prompts. `knownDevices` records names you've accepted from and
+is used purely as a hint on the prompt. Re-enabling auto-accept safely means
+implementing the certificate/contact exchange first.
 
 ## Security notes
 

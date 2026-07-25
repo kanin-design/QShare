@@ -18,32 +18,32 @@ struct ReceiveView: View {
                 instructions
             }
 
-            if !model.trustedDevices.isEmpty {
-                trustedDevices
+            if !model.knownDevices.isEmpty {
+                knownDevices
             }
         }
     }
 
-    private var trustedDevices: some View {
+    private var knownDevices: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text("Trusted devices").cardTitle()
-                Text("Files from these devices are accepted automatically.")
+                Text("Devices you've accepted from").cardTitle()
+                Text("Shown as a hint on the next request. Every transfer still needs your approval — a device name can't be verified.")
                     .secondaryStyle()
                 ScrollView {
                     VStack(spacing: Theme.Space.xs) {
-                        ForEach(model.trustedDevices, id: \.self) { name in
+                        ForEach(model.knownDevices, id: \.self) { name in
                             HStack(spacing: Theme.Space.sm) {
-                                Image(systemName: "checkmark.shield.fill").foregroundStyle(Theme.success)
+                                Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
                                 Text(name).primaryStyle()
                                 Spacer()
                                 Button {
-                                    model.untrust(name)
+                                    model.forget(name)
                                 } label: {
                                     Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("Remove \(name) from trusted devices")
+                                .accessibilityLabel("Forget \(name)")
                             }
                         }
                     }
@@ -67,7 +67,7 @@ struct ReceiveView: View {
                 GlassSwitch(isOn: Binding(
                     get: { model.isVisible },
                     set: { _ in model.toggleVisibility() }
-                ))
+                ), label: "Visible to nearby devices")
             }
         }
     }

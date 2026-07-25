@@ -16,6 +16,9 @@ import BigInt
 
 class NearbyConnection{
 	internal static let SANE_FRAME_LENGTH=5*1024*1024
+	// QuickShare2: cap in-flight bytes-payload buffers (setup frames are small
+	// and few; an unbounded map of them is a cheap memory-exhaustion vector).
+	internal static let MAX_CONCURRENT_PAYLOADS=16
 	private static let dispatchQueue=DispatchQueue(label: "com.stian.qshare.nearby.queue", qos: .utility) // FIFO (non-concurrent) queue to avoid those exciting concurrency bugs
 	
 	internal let connection:NWConnection
@@ -269,11 +272,21 @@ class NearbyConnection{
 			guard payloadTransfer.hasPayloadChunk, chunk.hasOffset, chunk.hasFlags else { throw NearbyError.requiredFieldMissing("payloadTransfer.payloadChunk|offset|flags") }
 			if case .bytes = header.type{
 				let payloadID=header.id
-				if header.totalSize>InboundNearbyConnection.SANE_FRAME_LENGTH{
+				// QuickShare2: totalSize is an attacker-controlled Int64. Upstream
+				// only bounded it from above, so a negative value reached
+				// NSMutableData(capacity:), which raises NSInvalidArgumentException
+				// ("absurd capacity") — an uncaught ObjC exception, i.e. a remote
+				// crash before the user has consented to anything.
+				guard header.totalSize>=0, header.totalSize<=NearbyConnection.SANE_FRAME_LENGTH else {
 					payloadBuffers.removeValue(forKey: payloadID)
-					throw NearbyError.protocolError("Payload too large (\(header.totalSize) bytes)")
+					throw NearbyError.protocolError("Payload size out of range (\(header.totalSize) bytes)")
 				}
 				if payloadBuffers[payloadID]==nil {
+					// QuickShare2: bound how many payloads can be in flight at once —
+					// each one otherwise pins up to SANE_FRAME_LENGTH of memory.
+					guard payloadBuffers.count<NearbyConnection.MAX_CONCURRENT_PAYLOADS else {
+						throw NearbyError.protocolError("Too many concurrent payloads")
+					}
 					payloadBuffers[payloadID]=NSMutableData(capacity: Int(header.totalSize))
 				}
 				let buffer=payloadBuffers[payloadID]!
@@ -282,6 +295,13 @@ class NearbyConnection{
 					throw NearbyError.protocolError("Unexpected chunk offset \(chunk.offset), expected \(buffer.count)")
 				}
 				if chunk.hasBody {
+					// QuickShare2: nothing bounded the *accumulated* buffer — only
+					// each individual frame — so a peer could stream chunks with
+					// well-formed offsets and grow this without limit.
+					guard buffer.count+chunk.body.count<=NearbyConnection.SANE_FRAME_LENGTH else {
+						payloadBuffers.removeValue(forKey: payloadID)
+						throw NearbyError.protocolError("Bytes payload exceeded the maximum size")
+					}
 					buffer.append(chunk.body)
 				}
 				if (chunk.flags & 1)==1 {

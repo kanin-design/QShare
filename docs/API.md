@@ -6,6 +6,10 @@ Android devices) from the command line or over HTTP.
 ## Prerequisites
 - The **QShare.app must be running** (it hosts the API). It's a menu-bar app;
   launching it once is enough — it keeps running in the background.
+- The API must be **enabled**: QShare > Settings > Automation > "Allow the
+  qshare command line". It is **off by default** — while on, anything running
+  under your account can ask QShare to send any file it can read to a nearby
+  device.
 - The API is **localhost-only** (`http://127.0.0.1:47821`), bound to `127.0.0.1`.
 - Every request needs a bearer token, read from `~/.config/qshare/token`
   (created by the app on first launch; file mode `0600`).
@@ -38,7 +42,7 @@ Base URL `http://127.0.0.1:47821`. Header on every request:
 | Method | Path | Body | Response |
 |--------|------|------|----------|
 | GET | `/health` | — | `{"ok":true}` |
-| GET | `/devices` | — | `[{"name","id","type","trusted"}]` |
+| GET | `/devices` | — | `[{"name","id","type","known"}]` |
 | GET | `/transfers` | — | `[{"title","device","percent","phase"}]` |
 | POST | `/send` | `{"paths":["/abs/f1",…],"to":"<name|id>"}` (or `"path":"/abs/f"`) | blocks, then `{"ok":bool,"pin":string?,"error":string?}` |
 
@@ -59,11 +63,14 @@ curl -s -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 - `200` success · `400` bad request body · `401` missing/invalid token ·
   `403` bad `Host` header · `404` unknown path · `502` send failed.
 - `/send` error strings: `device_not_found`, `no_readable_files`, `timeout`,
-  or an engine message (e.g. `Declined`, `Connection lost`).
+  `busy` (a send is already in flight — the flow is single-slot and shared with
+  the window), `control_api_disabled` (switched off mid-transfer), or an engine
+  message (e.g. `Declined`, `Connection lost`).
 
 ## Behaviour notes
-- **Sending needs the receiver to accept** (a PIN prompt on the phone) unless the
-  device is in QShare's *trusted* list — then it auto-accepts.
+- **Sending always needs the receiver to accept** (a PIN prompt on the phone).
+  There is no auto-accept: Quick Share exposes no verifiable device identity, so
+  `known: true` on `/devices` only means "you've accepted from that name before".
 - Device `id`s can change between sessions; prefer matching by `name`.
 - `/send` reuses the app's send flow, so an in-progress CLI send also shows in
   the app window.

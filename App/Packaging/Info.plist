@@ -20,8 +20,9 @@
     <string>0.1.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <!-- Must match Package.swift's .macOS("26.0"): the UI uses glassEffect. -->
     <key>LSMinimumSystemVersion</key>
-    <string>15.0</string>
+    <string>26.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 

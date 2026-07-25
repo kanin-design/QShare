@@ -4,10 +4,11 @@ import SwiftUI
 /// app root, so it appears over either tab — an incoming request is never hidden.
 struct IncomingRequestSheet: View {
     let request: IncomingRequest
-    let onAccept: (_ trustDevice: Bool) -> Void
+    /// True when we've accepted from a device using this name before. A hint
+    /// only — the name is unauthenticated, so it never decides anything.
+    let isKnown: Bool
+    let onAccept: () -> Void
     let onDecline: () -> Void
-
-    @State private var alwaysAllow = false
 
     var body: some View {
         VStack(spacing: Theme.Space.lg) {
@@ -30,23 +31,25 @@ struct IncomingRequestSheet: View {
 
             PinBadge(pin: request.pin)
 
-            Toggle(isOn: $alwaysAllow) {
-                Text("Always accept from \(request.device.name)")
-                    .font(.callout)
+            if isKnown {
+                Label("You've accepted from this name before", systemImage: "clock.arrow.circlepath")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .toggleStyle(.checkbox)
 
             HStack(spacing: Theme.Space.md) {
                 Button("Decline", role: .cancel, action: onDecline)
                     .controlSize(.large)
                     .keyboardShortcut(.cancelAction)
 
-                Button(action: { onAccept(alwaysAllow) }) {
+                // Deliberately NOT `.defaultAction`: this sheet appears
+                // unprompted and activates the app, so binding Accept to Return
+                // would let a stray keystroke accept an unsolicited transfer.
+                Button(action: onAccept) {
                     Text("Accept").frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(Theme.Space.xl)

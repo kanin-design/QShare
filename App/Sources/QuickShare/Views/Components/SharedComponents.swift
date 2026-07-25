@@ -56,6 +56,9 @@ struct PulsingDot: View {
 /// pass so it never flickers.
 struct GlassSwitch: View {
     @Binding var isOn: Bool
+    /// What this switch controls — the switch is used for several settings now,
+    /// so the label can't be baked in.
+    var label: String
     var onColor: Color = Theme.success
     var offColor: Color = Color(red: 0.85, green: 0.29, blue: 0.29)
 
@@ -74,7 +77,7 @@ struct GlassSwitch: View {
             .onTapGesture { isOn.toggle() }
             .accessibilityElement()
             .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-            .accessibilityLabel("Visible to nearby devices")
+            .accessibilityLabel(label)
     }
 }
 

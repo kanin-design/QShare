@@ -12,7 +12,8 @@ struct SettingsView: View {
                 downloadsCard
                 appearanceCard
                 receivingCard
-                trustedCard
+                automationCard
+                knownCard
             }
             .padding(Theme.Space.lg)
         }
@@ -67,27 +68,50 @@ struct SettingsView: View {
                     GlassSwitch(isOn: Binding(
                         get: { model.startVisible },
                         set: { model.setStartVisible($0) }
-                    ))
+                    ), label: "Be visible on launch")
                 }
             }
         }
     }
 
-    private var trustedCard: some View {
+    private var automationCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                Text("Automation").cardTitle()
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Allow the qshare command line").primaryStyle()
+                        Text("Serves a local API on 127.0.0.1:\(String(ControlServer.port)).")
+                            .secondaryStyle()
+                    }
+                    Spacer()
+                    GlassSwitch(isOn: Binding(
+                        get: { model.controlAPIEnabled },
+                        set: { model.setControlAPIEnabled($0) }
+                    ), label: "Allow the qshare command line")
+                }
+                Text("While this is on, anything running under your account can ask QShare to send any file it can read to a nearby device. Leave it off unless you use the CLI.")
+                    .secondaryStyle()
+            }
+        }
+    }
+
+    private var knownCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text("Trusted devices").cardTitle()
-                if model.trustedDevices.isEmpty {
-                    Text("None yet. Turn on “Always accept” when receiving to add one.")
+                Text("Devices you've accepted from").cardTitle()
+                if model.knownDevices.isEmpty {
+                    Text("None yet. Names appear here after you accept a transfer.")
                         .secondaryStyle()
                 } else {
-                    Text("Accepted automatically.").secondaryStyle()
-                    ForEach(model.trustedDevices, id: \.self) { name in
+                    Text("Shown as a hint on incoming requests. Every transfer still needs your approval.")
+                        .secondaryStyle()
+                    ForEach(model.knownDevices, id: \.self) { name in
                         HStack(spacing: Theme.Space.sm) {
-                            Image(systemName: "checkmark.shield.fill").foregroundStyle(Theme.success)
+                            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
                             Text(name).primaryStyle()
                             Spacer()
-                            Button("Remove") { model.untrust(name) }
+                            Button("Forget") { model.forget(name) }
                                 .controlSize(.small)
                         }
                         .padding(.vertical, 1)

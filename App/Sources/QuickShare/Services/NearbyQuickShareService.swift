@@ -18,6 +18,9 @@ final class NearbyQuickShareService: NSObject {
     /// Retain per-transfer outbound delegates, keyed by device id.
     private var outboundHandles: [String: OutboundHandle] = [:]
 
+    /// Guards against unbalanced discovery start/stop (see `startDiscovery`).
+    private var isDiscovering = false
+
     /// Hop an engine callback onto the main actor for the UI.
     func emit(_ body: @escaping @MainActor () -> Void) {
         Task { @MainActor in body() }
@@ -38,15 +41,17 @@ final class NearbyQuickShareService: NSObject {
 extension NearbyQuickShareService: QuickShareService {
 
     // Receive side
+    //
+    // Visibility is *not* reported here: the engine calls back via
+    // `visibilityDidChange` once mDNS has actually published (or failed), so the
+    // switch reflects reality rather than intent.
     func startAdvertising(deviceName: String) {
         manager.mainAppDelegate = self
         manager.becomeVisible()
-        emit { self.delegate?.serviceDidUpdateVisibility(isVisible: true) }
     }
 
     func stopAdvertising() {
         manager.becomeInvisible()
-        emit { self.delegate?.serviceDidUpdateVisibility(isVisible: false) }
     }
 
     func respondToIncoming(id: String, accept: Bool) {
@@ -58,12 +63,21 @@ extension NearbyQuickShareService: QuickShareService {
     }
 
     // Send side
+    //
+    // Idempotent on purpose. The engine refcounts discovery but
+    // `removeShareExtensionDelegate` removes *all* copies of a delegate, so an
+    // unbalanced start/start/stop would leave the browser running with nothing
+    // listening to it — devices would silently stop appearing.
     func startDiscovery() {
+        guard !isDiscovering else { return }
+        isDiscovering = true
         manager.startDeviceDiscovery()
         manager.addShareExtensionDelegate(self)
     }
 
     func stopDiscovery() {
+        guard isDiscovering else { return }
+        isDiscovering = false
         manager.removeShareExtensionDelegate(self)
         manager.stopDeviceDiscovery()
     }
@@ -96,6 +110,10 @@ extension NearbyQuickShareService: QuickShareService {
 // MARK: - Receive callbacks (MainAppDelegate)
 
 extension NearbyQuickShareService: MainAppDelegate {
+    func visibilityDidChange(isVisible: Bool) {
+        emit { self.delegate?.serviceDidUpdateVisibility(isVisible: isVisible) }
+    }
+
     func obtainUserConsent(for transfer: TransferMetadata, from device: RemoteDeviceInfo) {
         let names = transfer.files.isEmpty
             ? [transfer.textDescription ?? "Link"]
