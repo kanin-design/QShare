@@ -43,7 +43,10 @@ let package = Package(
             name: "FixtureGen",
             dependencies: [
                 "NearbyShareKit",
+                "QuickShareProtocol",
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                .product(name: "SwiftECC", package: "SwiftECC"),
+                .product(name: "BigInt", package: "BigInt"),
             ],
             path: "Tests/FixtureGen",
             swiftSettings: [.swiftLanguageMode(.v5)]
