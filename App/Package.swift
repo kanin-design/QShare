@@ -23,11 +23,47 @@ let package = Package(
             path: "Sources/NearbyShareKit",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // Our own Quick Share protocol implementation. No third-party
+        // dependencies — Foundation, Network and CryptoKit only.
+        .target(
+            name: "QuickShareProtocol",
+            path: "Sources/QuickShareProtocol",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
         // Our native SwiftUI app.
         .executableTarget(
             name: "QuickShare",
             dependencies: ["NearbyShareKit"],
             path: "Sources/QuickShare",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        // Temporary: uses swift-protobuf as an oracle to emit golden wire bytes
+        // for the hand-written codec. Deleted along with the dependency.
+        .testTarget(
+            name: "FixtureGen",
+            dependencies: [
+                "NearbyShareKit",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+            ],
+            path: "Tests/FixtureGen",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "NearbyShareKitTests",
+            dependencies: ["NearbyShareKit"],
+            path: "Tests/NearbyShareKitTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "QuickShareProtocolTests",
+            dependencies: ["QuickShareProtocol"],
+            path: "Tests/QuickShareProtocolTests",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .testTarget(
+            name: "QuickShareTests",
+            dependencies: ["QuickShare"],
+            path: "Tests/QuickShareTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
