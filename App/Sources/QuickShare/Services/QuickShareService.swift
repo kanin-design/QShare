@@ -2,13 +2,13 @@ import Foundation
 
 /// Abstraction over the Quick Share protocol engine.
 ///
-/// The dummy build ships `MockQuickShareService`; the real build ships
-/// `NearbyQuickShareService`, which wraps NearbyShareKit's
-/// `NearbyConnectionManager`. Same interface, so no UI code changes.
+/// `NearbyQuickShareService` adapts `QuickShareProtocol.QuickShareEngine`;
+/// `MockQuickShareService` simulates it for UI work (`QS_MOCK=1`). Same
+/// interface, so no UI code changes either way.
 ///
-/// Method groupings follow NearDrop's split:
-///   - receive side  ≈ MainAppDelegate (become visible, consent to incoming)
-///   - send side     ≈ ShareExtensionDelegate (discover, connect, push files, QR)
+/// The split mirrors the two roles a device plays:
+///   - receive side — become visible, consent to what arrives
+///   - send side    — discover, connect, push files, QR
 @MainActor
 protocol QuickShareService: AnyObject {
     var delegate: QuickShareServiceDelegate? { get set }
