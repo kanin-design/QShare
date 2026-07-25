@@ -30,6 +30,18 @@ public enum UKey2 {
         return Data(bytes)
     }
 
+    /// Two's-complement big-endian, as the reference emitted its own coordinates.
+    ///
+    /// A leading 0x00 is prepended when the top bit is set, so the value never
+    /// reads as negative — which is why a peer may see 33 bytes for a 32-byte
+    /// coordinate. We send the same encoding, since that is what has been
+    /// verified against real Android devices.
+    static func signedBytes(_ data: Data) -> Data {
+        let magnitude = magnitudeBytes(data)
+        guard let first = magnitude.first else { return Data([0]) }
+        return (first & 0x80) != 0 ? Data([0]) + magnitude : magnitude
+    }
+
     /// Normalises an X or Y coordinate to exactly 32 bytes.
     ///
     /// Peers may send a coordinate with a leading zero sign byte (33 bytes) or
@@ -57,10 +69,12 @@ public enum UKey2 {
         public init() { privateKey = P256.KeyAgreement.PrivateKey() }
         init(privateKey: P256.KeyAgreement.PrivateKey) { self.privateKey = privateKey }
 
-        /// The public key as the protocol's x/y pair.
+        /// The public key as the protocol's x/y pair, in the same signed
+        /// encoding the reference implementation put on the wire.
         public var ecP256: EcP256PublicKey {
             let raw = publicKey.rawRepresentation      // x‖y, 32 bytes each
-            return EcP256PublicKey(x: Data(raw.prefix(32)), y: Data(raw.suffix(32)))
+            return EcP256PublicKey(x: signedBytes(Data(raw.prefix(32))),
+                                   y: signedBytes(Data(raw.suffix(32))))
         }
 
         public var genericPublicKey: GenericPublicKey { GenericPublicKey(ecP256: ecP256) }
