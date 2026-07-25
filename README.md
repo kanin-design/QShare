@@ -3,10 +3,10 @@
 A native macOS app for **Quick Share** (Google's Nearby Share) — send and receive
 files to/from nearby Android devices over Wi-Fi LAN.
 
-The **real Quick Share protocol engine is wired in** (vendored from NearDrop as
-`NearbyShareKit`): mDNS discovery/advertising, UKEY2 handshake, and payload
-transfer. A **mock engine** is still available for UI work without an Android
-device (`QS_MOCK=1`).
+The Quick Share protocol is **implemented here from scratch** — mDNS
+discovery/advertising, UKEY2 handshake, secure messages and payload transfer —
+with **no third-party dependencies**. A **mock engine** is available for UI work
+without an Android device (`QS_MOCK=1`).
 
 ## Layout
 
@@ -14,10 +14,10 @@ device (`QS_MOCK=1`).
 QuickShare2/
 ├── App/                     ← native SwiftUI app (Swift package)
 │   └── Sources/
-│       ├── QuickShare/      the app: App/, Models/, Services/, Views/, Design/
-│       └── NearbyShareKit/  vendored Quick Share protocol engine (from NearDrop)
+│       ├── QuickShare/         the app: App/, Models/, Services/, Views/, Design/
+│       └── QuickShareProtocol/  the protocol: Wire/, Messages/, Crypto/, Transport/, Discovery/
 ├── Resources/
-│   └── NearDrop/            ← provenance: PROTOCOL.md (spec) + UNLICENSE
+│   └── NearDrop/            ← the reverse-engineered protocol spec + UNLICENSE
 ├── docs/
 │   └── ARCHITECTURE.md      design + engine integration notes
 └── ATTRIBUTION.md           credits for NearDrop and dependencies

@@ -1,0 +1,154 @@
+import Foundation
+import Network
+
+/// The whole protocol, behind one object.
+///
+/// Everything above this line — the app — deals in devices, offers and
+/// progress. Sockets, protobufs and key schedules stay below it.
+@MainActor
+public final class QuickShareEngine {
+
+    // MARK: Callbacks
+
+    /// Advertising actually started or stopped (not merely requested).
+    public var onVisibilityChange: (@MainActor (Bool) -> Void)?
+    public var onDeviceFound: (@MainActor (QuickShareDevice) -> Void)?
+    public var onDeviceLost: (@MainActor (String) -> Void)?
+    /// A peer is offering files. Answer with `respondToOffer(id:accept:)`.
+    public var onOfferReceived: (@MainActor (IncomingOffer) -> Void)?
+    public var onIncomingProgress: (@MainActor (String, Double) -> Void)?
+    public var onIncomingFinished: (@MainActor (String, [URL], QuickShareError?) -> Void)?
+    public var onOutgoingEvent: (@MainActor (String, OutboundEvent) -> Void)?
+    /// A device scanned our QR code and is now reachable.
+    public var onQRDeviceMatched: (@MainActor (QuickShareDevice) -> Void)?
+
+    // MARK: State
+
+    public private(set) var deviceName: String
+    public var receiveDirectory: URL
+
+    private let advertiser: ServiceAdvertiser
+    private let browser: ServiceBrowser
+    private let endpointID: [UInt8]
+
+    private var inboundSessions: [String: InboundSession] = [:]
+    private var outboundSessions: [String: OutboundSession] = [:]
+
+    public init(deviceName: String, receiveDirectory: URL) {
+        self.deviceName = deviceName
+        self.receiveDirectory = receiveDirectory
+        self.endpointID = Self.makeEndpointID()
+        self.advertiser = ServiceAdvertiser(deviceName: deviceName, endpointID: endpointID)
+        self.browser = ServiceBrowser()
+
+        advertiser.onVisibilityChange = { [weak self] visible in
+            self?.onVisibilityChange?(visible)
+        }
+        advertiser.onConnection = { [weak self] connection, id in
+            self?.acceptInbound(connection: connection, id: id)
+        }
+        browser.onFound = { [weak self] device, _ in self?.onDeviceFound?(device) }
+        browser.onLost = { [weak self] id in self?.onDeviceLost?(id) }
+        browser.onQRMatch = { [weak self] device in self?.onQRDeviceMatched?(device) }
+    }
+
+    // MARK: QR send
+
+    /// Starts a QR offer and returns the link to display. Discovery must be
+    /// running for the scanning device to be spotted.
+    public func beginQRSession() -> String {
+        let session = QRCodeSession()
+        browser.qrSession = session
+        return session.url
+    }
+
+    public func endQRSession() {
+        browser.qrSession = nil
+    }
+
+    /// Four random alphanumerics, as the protocol expects.
+    private static func makeEndpointID() -> [UInt8] {
+        let alphabet = Array("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".utf8)
+        var rng = SystemRandomNumberGenerator()
+        return (0..<4).map { _ in alphabet[Int.random(in: 0..<alphabet.count, using: &rng)] }
+    }
+
+    // MARK: Receiving
+
+    public func startAdvertising() { advertiser.start() }
+    public func stopAdvertising() { advertiser.stop() }
+
+    public func setDeviceName(_ name: String) {
+        deviceName = name
+        advertiser.updateDeviceName(name)
+    }
+
+    public func respondToOffer(id: String, accept: Bool) {
+        guard let session = inboundSessions[id] else { return }
+        Task { await session.respond(accept: accept) }
+    }
+
+    private func acceptInbound(connection: NWConnection, id: String) {
+        let session = InboundSession(connection: connection, id: id,
+                                     receiveDirectory: receiveDirectory)
+        inboundSessions[id] = session
+
+        Task { [weak self] in
+            let stream = await session.events()
+            for await event in stream {
+                guard let self else { return }
+                switch event {
+                case .offerReceived(let offer):
+                    self.onOfferReceived?(offer)
+                case .progress(let fraction):
+                    self.onIncomingProgress?(id, fraction)
+                case .finished(let urls):
+                    self.onIncomingFinished?(id, urls, nil)
+                case .failed(let error):
+                    self.onIncomingFinished?(id, [], error)
+                }
+            }
+            self?.inboundSessions.removeValue(forKey: id)
+        }
+    }
+
+    // MARK: Sending
+
+    public func startDiscovery() { browser.start() }
+    public func stopDiscovery() { browser.stop() }
+
+    /// Connects to `device` and offers `files`. The transfer id is returned so
+    /// the caller can correlate events and cancel.
+    @discardableResult
+    public func send(files: [OutgoingFile], to device: QuickShareDevice) -> String {
+        let transferID = device.id
+        guard let endpoint = browser.endpoint(for: device.id) else {
+            onOutgoingEvent?(transferID, .failed(.localFailure("device is no longer reachable")))
+            return transferID
+        }
+
+        let connection = NWConnection(to: endpoint, using: .tcp)
+        let localEndpointID = String(decoding: endpointID, as: UTF8.self)
+        let session = OutboundSession(connection: connection, id: transferID, files: files,
+                                      localName: deviceName, localEndpointID: localEndpointID)
+        outboundSessions[transferID] = session
+
+        Task { [weak self] in
+            let stream = await session.events()
+            for await event in stream {
+                self?.onOutgoingEvent?(transferID, event)
+            }
+            self?.outboundSessions.removeValue(forKey: transferID)
+        }
+        return transferID
+    }
+
+    public func cancelTransfer(id: String) {
+        if let outbound = outboundSessions[id] {
+            Task { await outbound.cancel() }
+        }
+        if let inbound = inboundSessions[id] {
+            Task { await inbound.cancel() }
+        }
+    }
+}

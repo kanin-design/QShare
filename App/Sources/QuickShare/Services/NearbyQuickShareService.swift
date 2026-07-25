@@ -1,256 +1,171 @@
 import Foundation
-import NearbyShareKit
+import QuickShareProtocol
 
-/// Real Quick Share engine: wraps NearbyShareKit's `NearbyConnectionManager`
-/// (vendored from NearDrop) and translates its two delegate protocols
-/// (`MainAppDelegate` for receiving, `ShareExtensionDelegate` for discovery)
-/// into our `QuickShareServiceDelegate`.
+/// Adapts `QuickShareEngine` to the app's `QuickShareService` interface.
 ///
-/// The type stays nonisolated (it conforms to NearbyShareKit's nonisolated
-/// delegate protocols); `QuickShareService` conformance is declared in an
-/// extension so the class isn't force-inferred onto the main actor. Every UI
-/// callback is hopped onto the main actor via `emit`.
-final class NearbyQuickShareService: NSObject {
+/// The engine is already `@MainActor` and callback-based, so this is a thin
+/// translation between its vocabulary (offers, sessions) and the app's
+/// (requests, transfers) — no threading work, no state of its own beyond the
+/// id bookkeeping the UI needs.
+@MainActor
+final class NearbyQuickShareService: QuickShareService {
+
     weak var delegate: QuickShareServiceDelegate?
 
-    private let manager = NearbyConnectionManager.shared
+    private let engine: QuickShareEngine
+    /// Maps an engine transfer id to the device it belongs to, so outbound
+    /// events can be reported with full context.
+    private var outboundDevices: [String: RemoteDevice] = [:]
+    /// Incoming offers awaiting the user's answer.
+    private var pendingOffers: [String: IncomingOffer] = [:]
 
-    /// Retain per-transfer outbound delegates, keyed by device id.
-    private var outboundHandles: [String: OutboundHandle] = [:]
-
-    /// Guards against unbalanced discovery start/stop (see `startDiscovery`).
-    private var isDiscovering = false
-
-    /// Hop an engine callback onto the main actor for the UI.
-    func emit(_ body: @escaping @MainActor () -> Void) {
-        Task { @MainActor in body() }
+    init() {
+        engine = QuickShareEngine(
+            deviceName: Host.current().localizedName ?? "Mac",
+            receiveDirectory: FileManager.default
+                .urls(for: .downloadsDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Downloads"))
+        wireUp()
     }
 
-    /// Reach the delegate on the main actor (used by OutboundHandle).
-    func emitToDelegate(_ body: @escaping @MainActor (QuickShareServiceDelegate) -> Void) {
-        emit { if let d = self.delegate { body(d) } }
+    private func wireUp() {
+        engine.onVisibilityChange = { [weak self] visible in
+            self?.delegate?.serviceDidUpdateVisibility(isVisible: visible)
+        }
+
+        engine.onDeviceFound = { [weak self] device in
+            self?.delegate?.serviceDidDiscover(Self.map(device))
+        }
+
+        engine.onDeviceLost = { [weak self] id in
+            self?.delegate?.serviceDidLose(deviceID: id)
+        }
+
+        engine.onQRDeviceMatched = { [weak self] device in
+            self?.delegate?.serviceDidMatchQRDevice(Self.map(device))
+        }
+
+        engine.onOfferReceived = { [weak self] offer in
+            guard let self else { return }
+            self.pendingOffers[offer.id] = offer
+            let names = offer.files.isEmpty
+                ? [offer.textTitle ?? "Link"]
+                : offer.files.map(\.name)
+            self.delegate?.serviceDidReceiveIncomingRequest(
+                IncomingRequest(id: offer.id,
+                                device: Self.map(offer.device),
+                                fileNames: names,
+                                totalBytes: offer.totalBytes,
+                                pin: offer.pinCode))
+        }
+
+        engine.onIncomingProgress = { [weak self] id, fraction in
+            self?.delegate?.serviceDidUpdateProgress(id: id, fraction: fraction)
+        }
+
+        engine.onIncomingFinished = { [weak self] id, urls, error in
+            guard let self else { return }
+            self.pendingOffers.removeValue(forKey: id)
+            if !urls.isEmpty {
+                self.delegate?.serviceDidResolveFiles(
+                    id: id, files: urls.map { TransferFile(name: $0.lastPathComponent, url: $0) })
+            }
+            self.delegate?.serviceDidFinishTransfer(id: id, error: error?.userMessage)
+        }
+
+        engine.onOutgoingEvent = { [weak self] id, event in
+            guard let self else { return }
+            let device = self.outboundDevices[id]
+            switch event {
+            case .connected(let pin):
+                if let device {
+                    self.delegate?.serviceDidEstablishConnection(with: device, pin: pin)
+                }
+            case .accepted:
+                self.delegate?.serviceDidAcceptTransfer(id: id)
+            case .progress(let fraction):
+                self.delegate?.serviceDidUpdateProgress(id: id, fraction: fraction)
+            case .finished:
+                self.outboundDevices.removeValue(forKey: id)
+                self.delegate?.serviceDidFinishTransfer(id: id, error: nil)
+            case .failed(let error):
+                self.outboundDevices.removeValue(forKey: id)
+                if let device {
+                    self.delegate?.serviceDidFailConnection(with: device, error: error.userMessage)
+                }
+                self.delegate?.serviceDidFinishTransfer(id: id, error: error.userMessage)
+            }
+        }
     }
 
-    func finishedOutbound(_ id: String) {
-        emit { self.outboundHandles.removeValue(forKey: id) }
-    }
-}
+    // MARK: Receive side
 
-// MARK: - QuickShareService (in an extension to avoid @MainActor inference)
-
-extension NearbyQuickShareService: QuickShareService {
-
-    // Receive side
-    //
-    // Visibility is *not* reported here: the engine calls back via
-    // `visibilityDidChange` once mDNS has actually published (or failed), so the
-    // switch reflects reality rather than intent.
     func startAdvertising(deviceName: String) {
-        manager.mainAppDelegate = self
-        manager.becomeVisible()
+        engine.setDeviceName(deviceName)
+        engine.startAdvertising()
     }
 
     func stopAdvertising() {
-        manager.becomeInvisible()
+        engine.stopAdvertising()
     }
 
     func respondToIncoming(id: String, accept: Bool) {
-        manager.submitUserConsent(transferID: id, accept: accept)
+        engine.respondToOffer(id: id, accept: accept)
     }
 
     func setReceiveDirectory(_ url: URL) {
-        NearbyConnectionManager.receiveDirectory = url
+        engine.receiveDirectory = url
     }
 
-    // Send side
-    //
-    // Idempotent on purpose. The engine refcounts discovery but
-    // `removeShareExtensionDelegate` removes *all* copies of a delegate, so an
-    // unbalanced start/start/stop would leave the browser running with nothing
-    // listening to it — devices would silently stop appearing.
-    func startDiscovery() {
-        guard !isDiscovering else { return }
-        isDiscovering = true
-        manager.startDeviceDiscovery()
-        manager.addShareExtensionDelegate(self)
-    }
+    // MARK: Send side
 
-    func stopDiscovery() {
-        guard isDiscovering else { return }
-        isDiscovering = false
-        manager.removeShareExtensionDelegate(self)
-        manager.stopDeviceDiscovery()
-    }
+    func startDiscovery() { engine.startDiscovery() }
+    func stopDiscovery() { engine.stopDiscovery() }
 
     func sendFiles(_ files: [FileItem], to device: RemoteDevice) {
-        let handle = OutboundHandle(transferID: device.id, device: device, owner: self)
-        outboundHandles[device.id] = handle
-        manager.startOutgoingTransfer(deviceID: device.id, delegate: handle, urls: files.map(\.url))
+        let outgoing = files.compactMap { try? OutgoingFile.from(url: $0.url) }
+        guard !outgoing.isEmpty else {
+            delegate?.serviceDidFailConnection(with: device, error: "Couldn't read those files")
+            return
+        }
+        outboundDevices[device.id] = device
+        engine.send(files: outgoing, to: Self.unmap(device))
     }
 
     func cancelTransfer(id: String) {
-        manager.cancelOutgoingTransfer(id: id)
-        outboundHandles.removeValue(forKey: id)
+        engine.cancelTransfer(id: id)
     }
 
-    // QR send
-    func prepareQRCode() -> String? {
-        // Same key exchange Android uses: an EC key whose advertising token we
-        // watch for while browsing. The QR is the Quick Share App Link URL —
-        // Android only routes it to Quick Share in exactly this form.
-        let key = manager.generateQrCodeKey()
-        return "https://quickshare.google/qrcode#key=\(key)"
+    // MARK: QR send
+
+    func prepareQRCode() -> String? { engine.beginQRSession() }
+    func cancelQRCode() { engine.endQRSession() }
+
+    // MARK: Mapping
+
+    private static func map(_ device: QuickShareDevice) -> RemoteDevice {
+        RemoteDevice(id: device.id, name: device.name, type: map(device.type))
     }
 
-    func cancelQRCode() {
-        manager.clearQrCodeKey()
-    }
-}
-
-// MARK: - Receive callbacks (MainAppDelegate)
-
-extension NearbyQuickShareService: MainAppDelegate {
-    func visibilityDidChange(isVisible: Bool) {
-        emit { self.delegate?.serviceDidUpdateVisibility(isVisible: isVisible) }
+    private static func unmap(_ device: RemoteDevice) -> QuickShareDevice {
+        QuickShareDevice(id: device.id, name: device.name, type: unmap(device.type))
     }
 
-    func obtainUserConsent(for transfer: TransferMetadata, from device: RemoteDeviceInfo) {
-        let names = transfer.files.isEmpty
-            ? [transfer.textDescription ?? "Link"]
-            : transfer.files.map(\.name)
-        let total = transfer.files.reduce(Int64(0)) { $0 + $1.size }
-        let request = IncomingRequest(
-            id: transfer.id,
-            device: mapDevice(device),
-            fileNames: names,
-            totalBytes: total,
-            pin: transfer.pinCode ?? "----")
-        emit { self.delegate?.serviceDidReceiveIncomingRequest(request) }
-    }
-
-    func incomingTransfer(id: String, progress: Double) {
-        emit { self.delegate?.serviceDidUpdateProgress(id: id, fraction: progress) }
-    }
-
-    func incomingTransfer(id: String, savedFiles: [URL]) {
-        let files = savedFiles.map { TransferFile(name: $0.lastPathComponent, url: $0) }
-        emit { self.delegate?.serviceDidResolveFiles(id: id, files: files) }
-    }
-
-    func incomingTransfer(id: String, didFinishWith error: Error?) {
-        let message = error.map(userMessage(for:))
-        emit { self.delegate?.serviceDidFinishTransfer(id: id, error: message) }
-    }
-}
-
-// MARK: - Discovery callbacks (ShareExtensionDelegate)
-
-extension NearbyQuickShareService: ShareExtensionDelegate {
-    func addDevice(device: RemoteDeviceInfo) {
-        let mapped = mapDevice(device)
-        emit { self.delegate?.serviceDidDiscover(mapped) }
-    }
-
-    func removeDevice(id: String) {
-        emit { self.delegate?.serviceDidLose(deviceID: id) }
-    }
-
-    // A device scanned our QR and is now reachable — tell the app to send.
-    func startTransferWithQrCode(device: RemoteDeviceInfo) {
-        let mapped = mapDevice(device)
-        emit { self.delegate?.serviceDidMatchQRDevice(mapped) }
-    }
-
-    // Remaining per-transfer callbacks are routed via OutboundHandle, not here.
-    func connectionWasEstablished(pinCode: String) {}
-    func connectionFailed(with error: Error) {}
-    func transferAccepted() {}
-    func transferProgress(progress: Double) {}
-    func transferFinished() {}
-}
-
-// MARK: - Per-transfer outbound delegate
-
-/// One instance per outgoing transfer. Carries the transfer id + device so the
-/// idless NearDrop callbacks can be routed back with full context.
-private final class OutboundHandle: ShareExtensionDelegate {
-    let transferID: String
-    let device: RemoteDevice
-    weak var owner: NearbyQuickShareService?
-
-    init(transferID: String, device: RemoteDevice, owner: NearbyQuickShareService) {
-        self.transferID = transferID
-        self.device = device
-        self.owner = owner
-    }
-
-    // Discovery methods are no-ops here.
-    func addDevice(device: RemoteDeviceInfo) {}
-    func removeDevice(id: String) {}
-    func startTransferWithQrCode(device: RemoteDeviceInfo) {}
-
-    func connectionWasEstablished(pinCode: String) {
-        let device = device
-        owner?.emitToDelegate { $0.serviceDidEstablishConnection(with: device, pin: pinCode) }
-    }
-
-    func transferAccepted() {
-        let id = transferID
-        owner?.emitToDelegate { $0.serviceDidAcceptTransfer(id: id) }
-    }
-
-    func transferProgress(progress: Double) {
-        let id = transferID
-        owner?.emitToDelegate { $0.serviceDidUpdateProgress(id: id, fraction: progress) }
-    }
-
-    func connectionFailed(with error: Error) {
-        let id = transferID
-        let device = device
-        let message = userMessage(for: error)
-        owner?.emitToDelegate {
-            $0.serviceDidFailConnection(with: device, error: message)
-            $0.serviceDidFinishTransfer(id: id, error: message)
-        }
-        owner?.finishedOutbound(id)
-    }
-
-    func transferFinished() {
-        let id = transferID
-        owner?.emitToDelegate { $0.serviceDidFinishTransfer(id: id, error: nil) }
-        owner?.finishedOutbound(id)
-    }
-}
-
-// MARK: - Mapping helpers (free functions, so `DeviceType` resolves to ours)
-
-private func mapDevice(_ info: RemoteDeviceInfo) -> RemoteDevice {
-    let type: DeviceType
-    switch info.type {
-    case .phone:    type = .phone
-    case .tablet:   type = .tablet
-    case .computer: type = .computer
-    case .unknown:  type = .unknown
-    }
-    return RemoteDevice(id: info.id ?? UUID().uuidString, name: info.name, type: type)
-}
-
-private func userMessage(for error: Error) -> String {
-    if let e = error as? NearbyError {
-        switch e {
-        case .canceled(let reason):
-            switch reason {
-            case .userRejected:    return "Declined"
-            case .userCanceled:    return "Cancelled"
-            case .notEnoughSpace:  return "Not enough space"
-            case .unsupportedType: return "Unsupported file type"
-            case .timedOut:        return "Timed out"
-            }
-        case .protocolError:        return "Protocol error"
-        case .requiredFieldMissing: return "Protocol error"
-        case .ukey2:                return "Handshake failed"
-        case .inputOutput:          return "Connection lost"
+    private static func map(_ type: QuickShareDevice.DeviceType) -> DeviceType {
+        switch type {
+        case .phone:    return .phone
+        case .tablet:   return .tablet
+        case .computer: return .computer
+        case .unknown:  return .unknown
         }
     }
-    return error.localizedDescription
+
+    private static func unmap(_ type: DeviceType) -> QuickShareDevice.DeviceType {
+        switch type {
+        case .phone:    return .phone
+        case .tablet:   return .tablet
+        case .computer: return .computer
+        case .unknown:  return .unknown
+        }
+    }
 }

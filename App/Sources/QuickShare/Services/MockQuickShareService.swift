@@ -130,8 +130,11 @@ final class MockQuickShareService: QuickShareService {
         tick(0)
     }
 
-    private func schedule(_ delay: TimeInterval, _ work: @escaping () -> Void) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    private func schedule(_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(delay))
+            work()
+        }
     }
 
     private static func randomPin() -> String {

@@ -3,9 +3,10 @@
 ## Goal
 
 Native macOS app to send/receive files with Android via **Quick Share** (Nearby
-Share) over Wi-Fi LAN. Built all-Swift, reusing the reverse-engineered protocol
-from [grishka/NearDrop](https://github.com/grishka/NearDrop) (public domain) as
-the handshake/transfer foundation.
+Share) over Wi-Fi LAN. All-Swift, **no third-party dependencies** — the protocol
+is implemented here on Foundation, Network and CryptoKit alone. The protocol
+itself was reverse-engineered by [grishka/NearDrop](https://github.com/grishka/NearDrop);
+see ATTRIBUTION.md.
 
 ## Layering
 
@@ -89,24 +90,44 @@ transfer moves to the shared Transfers list.
 `NearbyQuickShareService` passes a fresh `OutboundHandle` (carrying the transfer
 id + device) as the delegate for each send.
 
-## Modifications to vendored code
+## The protocol layer
 
-Kept minimal and marked `// QuickShare2` in `Sources/NearbyShareKit`:
-- `InboundNearbyConnection` / `NearbyConnectionManager`: added an **incoming
-  progress** hook (upstream only publishes a system `NSProgress` per file) and a
-  **saved-file-URLs** hook so the app can open/reveal received files.
-- **Path-traversal fix**: remote-supplied file names are sanitized to a single
-  path component and destinations are confined to the configured receive
-  directory (upstream wrote `downloads.appendingPathComponent(file.name)` with
-  the raw remote name).
-- **Real visibility reporting**: `NetServiceDelegate` is actually implemented and
-  a `visibilityDidChange` hook reports advertising state, so the UI can't claim
-  to be visible when the listener failed or mDNS never published.
-- **Listener lifecycle**: teardown is tracked with an explicit flag rather than
-  polling the asynchronously-updated `NWListener.state`, and the listener is
-  optional so a failed creation degrades instead of trapping.
-- `NearbyConnectionManager.becomeInvisible()` + `becomeVisible()` listener
-  recreation, so advertising can actually be toggled off and back on.
+`Sources/QuickShareProtocol/` is ours end to end. No generated code, no external
+packages.
+
+| Area | Files | Notes |
+|---|---|---|
+| Wire format | `Wire/ProtoWire.swift` | Hand-written proto2 reader/writer. Bounds-checked, varints capped, length prefixes validated against remaining bytes *before* allocating, depth-limited, unknown fields skipped rather than retained. |
+| Messages | `Messages/*.swift` | The ~32 messages the protocol actually exchanges, replacing 15,436 lines of generated code. |
+| Crypto | `Crypto/*.swift` | UKEY2 key agreement on CryptoKit P-256; AES-256-CBC + HMAC-SHA256 envelope. |
+| Transport | `Transport/*.swift` | Actor-isolated async framing and the two session state machines. |
+| Discovery | `Discovery/*.swift` | mDNS advertise/browse, endpoint info, QR path. |
+
+Two details are load-bearing and easy to get wrong; both are pinned by tests.
+
+**Shared-secret encoding.** The key schedule hashes the ECDH X coordinate as a
+*magnitude* — leading zeros stripped. CryptoKit returns a fixed 32 bytes. Using
+it directly makes the two peers derive different keys whenever X starts with a
+zero byte, roughly 1 handshake in 256. `UKey2.magnitudeBytes` reproduces the
+reference behaviour; `CryptoVectors` holds cases cross-checked against the
+original implementation, including the divergent ones.
+
+**Public-key validation.** `P256.KeyAgreement.PublicKey(rawRepresentation:)`
+does *not* check that the point is on the curve — it accepts all-zero and
+arbitrary coordinates. Peer keys go through the X9.63 initialiser, which does
+validate, closing an invalid-curve attack on the handshake.
+
+## Wire compatibility
+
+The protocol is undocumented, so "correct" means "byte-identical to something
+that demonstrably worked". Before the protobuf dependency was removed, every
+message was serialized with it and the bytes captured as `GoldenFixtures`. Each
+type must encode to exactly those bytes and round-trip them. Regenerating them
+requires temporarily restoring the dependency, which should not be necessary
+unless the protocol itself changes.
+
+That covers the wire format and the key schedule. It does **not** prove
+interoperability with a real Android device — only a live transfer does.
 
 ## Status / next
 
@@ -116,11 +137,12 @@ end-to-end verification against a real Android device, menu-bar item, transfer
 history, configurable receive location.
 
 Next:
-1. **Harden** the frame/protobuf parser (untrusted network input — see the
-   *Protocol Prying* paper and SafeBreach's Quick Share RCE writeup).
+1. **Smoke-test against a real Android device**, both directions. The rewrite is
+   covered by 117 tests but has not yet moved a byte to a phone.
 2. **Finder share extension** as a second entry point.
 3. **Verifiable device identity.** Auto-accept is deliberately absent because
    there is nothing to key it on — see *Device identity* below.
+4. **Quarantine received files** so Gatekeeper treats them as downloaded.
 
 ## Device identity (why there is no auto-accept)
 
