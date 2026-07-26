@@ -18,11 +18,12 @@ struct QuickShareApp: App {
         .windowResizability(.contentMinSize)   // freely resizable; content fills + scrolls
         .defaultSize(width: 460, height: 700)
         .commands {
-            // ⌘⇧D. A real menu command rather than a hidden button: it works
+            // ⌘⌥I. A real menu command rather than a hidden button: it works
             // regardless of focus, and it's discoverable in the menu bar.
+            // (⌘⇧D was taken by a system-wide shortcut.)
             CommandGroup(after: .appInfo) {
                 Button("Build Info…") { model.showingBuildInfo = true }
-                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                    .keyboardShortcut("i", modifiers: [.command, .option])
             }
         }
 

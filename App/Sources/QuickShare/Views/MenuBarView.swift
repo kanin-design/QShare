@@ -41,6 +41,14 @@ struct MenuBarView: View {
         }
         SettingsLink { Text("Settings…") }
             .keyboardShortcut(",")
+        // Reachable from the menu bar too — the main window may not be open.
+        Button("Build Info…") {
+            NSApp.setActivationPolicy(.regular)
+            model.showingBuildInfo = true
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .keyboardShortcut("i", modifiers: [.command, .option])
         Button("Quit QShare") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }

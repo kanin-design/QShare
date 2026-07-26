@@ -8,9 +8,9 @@ private struct ScrollMetrics: Equatable {
     var container: CGFloat = 0
 }
 
-/// Natural height of the rows, measured independently of the scroll viewport so
-/// the panel can size itself to its content (and only scroll past a cap).
-private struct ContentHeightKey: PreferenceKey {
+/// Height of the fixed controls above the transfers panel, so the panel's cap
+/// can be "whatever is actually left" rather than a guess.
+struct ControlsHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
@@ -23,10 +23,12 @@ struct TransfersList: View {
     let transfers: [ActiveTransfer]
     let onClear: () -> Void
     let onCancel: (ActiveTransfer) -> Void
+    /// Ceiling from the parent, measured from what's actually left in the
+    /// window. The panel wraps its rows until it would exceed this, then scrolls.
+    var maxHeight: CGFloat = 360
 
     @State private var metrics = ScrollMetrics()
     @State private var scrollPos = ScrollPosition(edge: .top)
-    @State private var contentHeight: CGFloat = 0
 
     private var scrollable: Bool { metrics.content - metrics.container > 1 }
 
@@ -39,48 +41,43 @@ struct TransfersList: View {
                     .foregroundStyle(Theme.accent)
             ))
 
-            GeometryReader { geo in
-                // Fit content when it's short; cap at the available height and scroll otherwise.
-                let panelH = contentHeight <= 0 ? geo.size.height : min(contentHeight, geo.size.height)
-
-                ScrollView {
-                    // Same construction as the nearby-devices list: hover-highlighting
-                    // rows on one glass panel, separated by a 2pt gap (no divider lines).
-                    VStack(spacing: 2) {
-                        ForEach(transfers) { t in
-                            TransferRow(transfer: t) { onCancel(t) }
-                        }
+            ScrollView {
+                // Same construction as the nearby-devices list: hover-highlighting
+                // rows on one glass panel, separated by a 2pt gap (no divider lines).
+                VStack(spacing: 2) {
+                    ForEach(transfers) { t in
+                        TransferRow(transfer: t) { onCancel(t) }
                     }
-                    .padding(Theme.Space.xs)
-                    .padding(.trailing, scrollable ? 12 : 0)   // clear the scrollbar
-                    .background(ScrollerHider())   // suppress native scroller + its background
-                    .background(GeometryReader { g in
-                        Color.clear.preference(key: ContentHeightKey.self, value: g.size.height)
-                    })
                 }
-                .frame(height: panelH)
-                .scrollPosition($scrollPos)
-                .scrollIndicators(.hidden)
-                .onScrollGeometryChange(for: ScrollMetrics.self) { geo in
-                    ScrollMetrics(offset: geo.contentOffset.y,
-                                  content: geo.contentSize.height,
-                                  container: geo.containerSize.height)
-                } action: { _, new in metrics = new }
-                .glassSurface(radius: Theme.Radius.card)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-                .overlay(alignment: .trailing) {
-                    if scrollable {
-                        GlassScrollbar(offset: metrics.offset,
-                                       content: metrics.content,
-                                       container: metrics.container) { y in
-                            scrollPos.scrollTo(y: y)
-                        }
-                        .frame(height: panelH)
-                        .padding(.trailing, 3)
+                .padding(Theme.Space.xs)
+                .padding(.trailing, scrollable ? 12 : 0)   // clear the scrollbar
+                .background(ScrollerHider())   // suppress native scroller + its background
+            }
+            .scrollPosition($scrollPos)
+            .scrollIndicators(.hidden)
+            .onScrollGeometryChange(for: ScrollMetrics.self) { geo in
+                ScrollMetrics(offset: geo.contentOffset.y,
+                              content: geo.contentSize.height,
+                              container: geo.containerSize.height)
+            } action: { _, new in metrics = new }
+            // `fixedSize` makes the scroll view adopt its content's height, so a
+            // short list wraps instead of filling the window; `maxHeight` then
+            // caps it and scrolling takes over. Order matters — the cap has to
+            // be applied to the already-wrapped height.
+            .frame(maxHeight: maxHeight)
+            .fixedSize(horizontal: false, vertical: true)
+            .glassSurface(radius: Theme.Radius.card)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(alignment: .trailing) {
+                if scrollable {
+                    GlassScrollbar(offset: metrics.offset,
+                                   content: metrics.content,
+                                   container: metrics.container) { y in
+                        scrollPos.scrollTo(y: y)
                     }
+                    .padding(.trailing, 3)
                 }
             }
-            .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
         }
     }
 }

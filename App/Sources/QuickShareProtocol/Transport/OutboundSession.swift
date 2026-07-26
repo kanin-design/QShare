@@ -25,6 +25,28 @@ public actor OutboundSession {
     private var sentBytes: Int64 = 0
     private var payloadIDs: [Int64] = []
 
+    // MARK: Concurrent reading
+    //
+    // The peer keeps talking while we send: it sends keep-alives that expect an
+    // ack, and it may cancel. A send loop that never reads misses both — the
+    // phone concludes the link is dead and aborts, while we happily finish
+    // writing and report success. So one reader runs for the whole session,
+    // concurrently with the writes.
+    private var readerTask: Task<Void, Never>?
+    /// A failure the peer reported. Checked between chunks and before finishing.
+    private var peerError: QuickShareError?
+    /// Set once every byte is out, so a socket close after that reads as normal
+    /// rather than as a failure.
+    private var sendingComplete = false
+    private var peerDisconnected = false
+    private var consentWaiter: CheckedContinuation<SharingResponseStatus, Never>?
+    /// A decision that arrived before anyone was waiting for it.
+    ///
+    /// Sending the introduction has `await` points, so a peer that answers
+    /// instantly — anything automated, or a fast link — can be answered before
+    /// the waiter exists. Dropping that signal deadlocks the send.
+    private var bufferedConsent: SharingResponseStatus?
+
     public init(connection: NWConnection, id: String, files: [OutgoingFile],
                 localName: String, localEndpointID: String) {
         self.id = id
@@ -58,6 +80,8 @@ public actor OutboundSession {
             let keys = try await performHandshake()
             continuation?.yield(.connected(pinCode: keys.pinCode))
             try await exchangeSetupFrames()
+            // From here the peer can speak unprompted, so read continuously.
+            startReader()
             try await sendIntroductionAndAwaitConsent()
             try await sendFiles()
         } catch let error as QuickShareError {
@@ -188,6 +212,90 @@ public actor OutboundSession {
         }
     }
 
+    // MARK: Reader
+
+    private func startReader() {
+        guard let secure else { return }
+        readerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    let incoming = try await secure.receive()
+                    await self?.handle(incoming, on: secure)
+                } catch let error as QuickShareError {
+                    await self?.readerStopped(error)
+                    return
+                } catch {
+                    await self?.readerStopped(.connectionLost)
+                    return
+                }
+            }
+        }
+    }
+
+    private func handle(_ incoming: SecureChannel.Incoming, on secure: SecureChannel) async {
+        switch incoming {
+        case .keepAlive:
+            // The whole point of reading during a send: miss these and the peer
+            // decides we're gone.
+            try? await secure.sendKeepAlive(ack: true)
+
+        case .setupFrame(let frame):
+            guard let v1 = frame.v1 else { return }
+            if v1.type == .cancel {
+                fail(.rejected(.userCanceled))
+                return
+            }
+            if v1.type == .response, let status = v1.connectionResponse?.status {
+                resumeConsent(status)
+            }
+
+        case .disconnected:
+            peerDisconnected = true
+            // A close before we've finished sending means it didn't land.
+            if !sendingComplete { fail(.connectionLost) }
+            resumeConsent(.reject)
+
+        case .fileChunk, .bytesPayload, .ignored:
+            return
+        }
+    }
+
+    private func readerStopped(_ error: QuickShareError) {
+        peerDisconnected = true
+        // Once every byte is out, the peer hanging up is the expected ending.
+        if !sendingComplete { fail(error) }
+        resumeConsent(.reject)
+    }
+
+    private func fail(_ error: QuickShareError) {
+        if peerError == nil { peerError = error }
+    }
+
+    private func resumeConsent(_ status: SharingResponseStatus) {
+        if let waiter = consentWaiter {
+            consentWaiter = nil
+            waiter.resume(returning: status)
+        } else if bufferedConsent == nil {
+            bufferedConsent = status
+        }
+    }
+
+    /// Waits for the peer's decision, taking one that already arrived.
+    ///
+    /// The check and the continuation install happen with no `await` between
+    /// them, so the reader cannot slip in and be dropped.
+    private func awaitConsent() async -> SharingResponseStatus {
+        if let already = bufferedConsent {
+            bufferedConsent = nil
+            return already
+        }
+        return await withCheckedContinuation { continuation in
+            self.consentWaiter = continuation
+        }
+    }
+
+    // MARK: Offer
+
     private func sendIntroductionAndAwaitConsent() async throws {
         guard let secure else { throw QuickShareError.internalFailure("no secure channel") }
 
@@ -206,29 +314,19 @@ public actor OutboundSession {
         }
         try await secure.sendSetupFrame(.introduction(introduction))
 
-        // Wait for the remote user's decision.
-        while true {
-            switch try await secure.receive() {
-            case .setupFrame(let frame):
-                guard let v1 = frame.v1 else { continue }
-                if v1.type == .cancel { throw QuickShareError.rejected(.userCanceled) }
-                guard v1.type == .response, let status = v1.connectionResponse?.status else { continue }
-                switch status {
-                case .accept:
-                    continuation?.yield(.accepted)
-                    return
-                case .reject, .unknown:      throw QuickShareError.rejected(.userRejected)
-                case .notEnoughSpace:        throw QuickShareError.rejected(.notEnoughSpace)
-                case .unsupportedAttachmentType: throw QuickShareError.rejected(.unsupportedType)
-                case .timedOut:              throw QuickShareError.rejected(.timedOut)
-                }
-            case .keepAlive:
-                try await secure.sendKeepAlive(ack: true)
-            case .disconnected:
-                throw QuickShareError.connectionLost
-            default:
-                continue
-            }
+        // The reader delivers the decision; it also keeps acking keep-alives
+        // while the user takes their time over the prompt.
+        let status = await awaitConsent()
+
+        if let peerError { throw peerError }
+
+        switch status {
+        case .accept:
+            continuation?.yield(.accepted)
+        case .reject, .unknown:          throw QuickShareError.rejected(.userRejected)
+        case .notEnoughSpace:            throw QuickShareError.rejected(.notEnoughSpace)
+        case .unsupportedAttachmentType: throw QuickShareError.rejected(.unsupportedType)
+        case .timedOut:                  throw QuickShareError.rejected(.timedOut)
         }
     }
 
@@ -237,6 +335,7 @@ public actor OutboundSession {
 
         for (index, file) in files.enumerated() {
             guard !cancelled else { throw QuickShareError.rejected(.userCanceled) }
+            if let peerError { throw peerError }
             let payloadID = payloadIDs[index]
             guard let handle = try? FileHandle(forReadingFrom: file.url) else {
                 throw QuickShareError.localFailure("couldn't read \(file.name)")
@@ -246,6 +345,9 @@ public actor OutboundSession {
             var offset: Int64 = 0
             while offset < file.size {
                 guard !cancelled else { throw QuickShareError.rejected(.userCanceled) }
+                // Stop the moment the peer says it can't take this, instead of
+                // writing megabytes into a connection that's already given up.
+                if let peerError { throw peerError }
                 // Distinguish a read failure from end-of-file: silently sending
                 // short would leave the receiver waiting on bytes that never come.
                 let chunkData: Data?
@@ -304,7 +406,18 @@ public actor OutboundSession {
             try await secure.send(.payloadTransfer(transfer))
         }
 
+        // Every byte is out. From here a socket close is the normal ending.
+        sendingComplete = true
         try? await secure.sendDisconnect()
+
+        // Give the peer a moment to object before we call this a success. It's
+        // the difference between "sent" and "the phone couldn't take it".
+        for _ in 0..<20 {
+            if peerError != nil || peerDisconnected { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        if let peerError { throw peerError }
+
         await finish(.finished)
     }
 
@@ -320,6 +433,15 @@ public actor OutboundSession {
     private func finish(_ event: OutboundEvent) async {
         guard !finished else { return }
         finished = true
+
+        // Tear the reader down before closing, so it can't be left spinning on a
+        // dead socket — a leaked reader keeps the connection alive and is why a
+        // failed send could leave the device unreachable afterwards.
+        readerTask?.cancel()
+        readerTask = nil
+        // Nothing is going to answer a pending consent wait now.
+        resumeConsent(.reject)
+
         continuation?.yield(event)
         continuation?.finish()
         continuation = nil

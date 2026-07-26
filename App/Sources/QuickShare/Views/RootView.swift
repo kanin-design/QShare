@@ -6,37 +6,57 @@ import AppKit
 /// surface regardless of the active tab.
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
+    /// Height of the fixed controls, measured rather than assumed.
+    @State private var controlsHeight: CGFloat = 0
+
+    /// Room left for the transfers panel: the window minus the controls and the
+    /// padding around the panel, with a floor so it stays usable when the window
+    /// is dragged very short.
+    private func transfersMaxHeight(in windowHeight: CGFloat) -> CGFloat {
+        let verticalPadding = Theme.Space.lg * 2
+        return max(120, windowHeight - controlsHeight - verticalPadding)
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            modePicker
-                .padding(.horizontal, Theme.Space.lg)
-                .padding(.top, Theme.Space.lg)
-                .padding(.bottom, Theme.Space.lg)
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                // Fixed controls (header, mode switch, send/receive), measured so
+                // the transfers panel below knows how much room is genuinely left.
+                VStack(spacing: 0) {
+                    header
+                    modePicker
+                        .padding(.horizontal, Theme.Space.lg)
+                        .padding(.top, Theme.Space.lg)
+                        .padding(.bottom, Theme.Space.lg)
 
-            // Fixed controls (send/receive)…
-            Group {
-                switch model.mode {
-                case .send:    SendView()
-                case .receive: ReceiveView()
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: model.mode)
-            .padding(.horizontal, Theme.Space.lg)
-
-            // …then the transfers history fills the rest and scrolls on its own.
-            if !model.transfers.isEmpty {
-                TransfersList(transfers: model.transfers,
-                              onClear: { model.clearFinishedTransfers() },
-                              onCancel: { model.cancel($0) })
+                    Group {
+                        switch model.mode {
+                        case .send:    SendView()
+                        case .receive: ReceiveView()
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.2), value: model.mode)
                     .padding(.horizontal, Theme.Space.lg)
-                    .padding(.top, Theme.Space.lg)
-                    .padding(.bottom, Theme.Space.lg)
-                    .frame(maxHeight: .infinity)
-            } else {
+                }
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: ControlsHeightKey.self, value: g.size.height)
+                })
+
+                // …then the transfers history wraps its rows, growing only until
+                // it would run out of window, at which point it scrolls.
+                if !model.transfers.isEmpty {
+                    TransfersList(transfers: model.transfers,
+                                  onClear: { model.clearFinishedTransfers() },
+                                  onCancel: { model.cancel($0) },
+                                  maxHeight: transfersMaxHeight(in: geo.size.height))
+                        .padding(.horizontal, Theme.Space.lg)
+                        .padding(.top, Theme.Space.lg)
+                        .padding(.bottom, Theme.Space.lg)
+                }
+
                 Spacer(minLength: 0)
             }
+            .onPreferenceChange(ControlsHeightKey.self) { controlsHeight = $0 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
