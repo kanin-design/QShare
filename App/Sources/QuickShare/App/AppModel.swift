@@ -70,6 +70,11 @@ final class AppModel: ObservableObject {
     // Both
     @Published var transfers: [ActiveTransfer] = []
 
+    /// Recently transferred files, newest first, for the File menu.
+    @Published var recentFiles: [RecentFile] = []
+    private let recentFilesKey = "recentFiles"
+    private static let maxRecentFiles = 10
+
     /// Senders we've accepted from before, and whether to auto-accept from them.
     ///
     /// Auto-accept is per-device and opt-in — never the default for a device just
@@ -121,6 +126,10 @@ final class AppModel: ObservableObject {
         if let a = defaults.string(forKey: appearanceKey),
            let parsed = AppAppearance(rawValue: a) { self.appearance = parsed }
         self.knownDevices = loadKnownDevices(defaults)
+        if let data = defaults.data(forKey: recentFilesKey),
+           let decoded = try? JSONDecoder().decode([RecentFile].self, from: data) {
+            self.recentFiles = decoded
+        }
         self.service.delegate = self
         self.service.setReceiveDirectory(downloadDirectory)
         if startVisible { self.service.startAdvertising(deviceName: deviceName) }
@@ -297,6 +306,52 @@ final class AppModel: ObservableObject {
         if incomingRequest != nil { return "arrow.down.circle.fill" }
         if transfers.contains(where: { $0.phase == .transferring }) { return "arrow.up.arrow.down.circle.fill" }
         return isVisible ? "arrow.2.circlepath.circle.fill" : "arrow.2.circlepath"
+    }
+
+    // MARK: Recent files
+
+    /// Records the files of a completed transfer, newest first.
+    private func recordRecentFiles(from transfer: ActiveTransfer) {
+        let incoming = transfer.direction == .incoming
+        let entries = transfer.files.compactMap { file -> RecentFile? in
+            guard let url = file.url else { return nil }
+            return RecentFile(name: file.name, path: url.path,
+                              receivedAt: Date(), wasIncoming: incoming)
+        }
+        guard !entries.isEmpty else { return }
+
+        // Re-transferring a file should move it up, not duplicate it.
+        let newPaths = Set(entries.map(\.path))
+        recentFiles.removeAll { newPaths.contains($0.path) }
+        recentFiles.insert(contentsOf: entries, at: 0)
+        if recentFiles.count > Self.maxRecentFiles {
+            recentFiles = Array(recentFiles.prefix(Self.maxRecentFiles))
+        }
+        persistRecentFiles()
+    }
+
+    func clearRecentFiles() {
+        recentFiles.removeAll()
+        persistRecentFiles()
+    }
+
+    private func persistRecentFiles() {
+        guard let data = try? JSONEncoder().encode(recentFiles) else { return }
+        UserDefaults.standard.set(data, forKey: recentFilesKey)
+    }
+
+    func openRecentFile(_ file: RecentFile) {
+        guard file.stillExists else {
+            // Gone from disk — drop it rather than bouncing the Dock icon.
+            recentFiles.removeAll { $0.path == file.path }
+            persistRecentFiles()
+            return
+        }
+        NSWorkspace.shared.open(file.url)
+    }
+
+    func openDownloadsFolder() {
+        NSWorkspace.shared.open(downloadDirectory)
     }
 
     // MARK: Known devices
@@ -581,7 +636,10 @@ extension AppModel: QuickShareServiceDelegate {
     func serviceDidFinishTransfer(id: String, error: String?) {
         if let i = transfers.firstIndex(where: { $0.id == id && !$0.phase.isTerminal }) {
             transfers[i].phase = error == nil ? .completed : .failed(error!)
-            if error == nil { transfers[i].fraction = 1.0 }
+            if error == nil {
+                transfers[i].fraction = 1.0
+                recordRecentFiles(from: transfers[i])
+            }
         }
         if connection.device?.id == id { connection = .idle; stagedFiles = [] }
         finishCli(id, ok: error == nil, error: error)

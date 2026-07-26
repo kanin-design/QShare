@@ -21,15 +21,7 @@ struct QuickShareApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)   // honour the width bounds above
         .defaultSize(width: 460, height: 700)
-        .commands {
-            // ⌘⌥I. A real menu command rather than a hidden button: it works
-            // regardless of focus, and it's discoverable in the menu bar.
-            // (⌘⇧D was taken by a system-wide shortcut.)
-            CommandGroup(after: .appInfo) {
-                Button("Build Info…") { model.showingBuildInfo = true }
-                    .keyboardShortcut("i", modifiers: [.command, .option])
-            }
-        }
+        .commands { AppCommands(model: model) }
 
         // Menu-bar presence: usable without the window in front.
         MenuBarExtra {
@@ -52,6 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)   // show the window + Dock icon on launch
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    // Note on the Help menu: `CommandGroup(replacing: .help) {}` removes its one
+    // dead item ("QShare Help"), leaving only the system search field. The menu
+    // itself can't be removed from here — AppKit reinstates it after launch, and
+    // stripping it from NSApp.mainMenu (also via NSApp.helpMenu) was verified
+    // not to stick. Left in place rather than fought with a timer.
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Closing the window drops the app to a menu-bar-only agent (no Dock icon).
