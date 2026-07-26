@@ -71,7 +71,10 @@ struct RootView: View {
     // Slim title on the traffic-light row: 100% centered, vertically aligned with
     // the traffic-light buttons (28pt band), no divider.
     private var header: some View {
-        Text("QShare")
+        // TEMPORARY: the "+" marks a build running the new dependency-free
+        // protocol stack, so it's obvious at a glance which one is launched.
+        // Revert to "QShare" once the rewrite is confirmed working.
+        Text("QShare+")
             .font(.system(size: 13, weight: .light))
             .foregroundStyle(.primary.opacity(0.9))
             .frame(maxWidth: .infinity, minHeight: 28)
