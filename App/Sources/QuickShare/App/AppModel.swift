@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AppKit
+import UserNotifications
 
 enum AppMode: String, CaseIterable, Identifiable {
     case send = "Send"
@@ -53,6 +54,8 @@ final class AppModel: ObservableObject {
 
     // Global
     @Published var mode: AppMode = .send
+    /// Drives the ⌘⇧D build-info sheet; set from the menu command.
+    @Published var showingBuildInfo = false
     @Published var deviceName: String = AppModel.defaultDeviceName()
 
     // Receive side
@@ -67,21 +70,22 @@ final class AppModel: ObservableObject {
     // Both
     @Published var transfers: [ActiveTransfer] = []
 
-    /// Names of devices we've accepted from before (persisted).
+    /// Senders we've accepted from before, and whether to auto-accept from them.
     ///
-    /// This is a *convenience hint only* — it surfaces "you've accepted from this
-    /// name before" on the incoming prompt. It deliberately does not auto-accept.
+    /// Auto-accept is per-device and opt-in — never the default for a device just
+    /// because you accepted from it once.
     ///
-    /// Quick Share gives us no stable device identity to key trust on: the UKEY2
-    /// keys are freshly generated per handshake, and the paired-key/certificate
-    /// frames that would carry a persistent identity are stubbed out in the
-    /// vendored engine (it answers `pairedKeyResult = .unable`). The device name
-    /// is remote-supplied and unauthenticated, so auto-accepting on it would let
-    /// anything on the LAN write to the receive folder just by claiming the name.
-    @Published var knownDevices: [String] = []
-    private let knownKey = "knownDeviceNames"
-    /// Superseded by `knownKey`; cleared on launch so no one keeps an
-    /// auto-accept list that used to bypass the prompt.
+    /// Worth knowing what it can and can't promise: the only thing a sender
+    /// proves is the name it chose to advertise. Quick Share exposes no
+    /// verifiable device identity here (UKEY2 keys are per-handshake, and the
+    /// certificate frames that would carry one are stubbed), so a device on your
+    /// network that claims a name you've enabled will be auto-accepted. That's
+    /// why auto-accepted transfers still post a notification instead of landing
+    /// silently.
+    @Published var knownDevices: [KnownDevice] = []
+    private let knownKey = "knownDevices"
+    /// Earlier shapes of this list, migrated on launch.
+    private let legacyNamesKey = "knownDeviceNames"
     private let legacyTrustKey = "trustedDeviceNames"
 
     // Settings (persisted)
@@ -107,16 +111,8 @@ final class AppModel: ObservableObject {
         } else {
             self.service = NearbyQuickShareService()
         }
-        // Migrate off the old name-keyed auto-accept list. Those entries used to
-        // bypass the prompt entirely, so they are carried over as display-only
-        // "known" names and the old key is removed.
         let defaults = UserDefaults.standard
-        if let legacy = defaults.stringArray(forKey: legacyTrustKey) {
-            let merged = (defaults.stringArray(forKey: knownKey) ?? []) + legacy
-            defaults.set(Array(Set(merged)).sorted(), forKey: knownKey)
-            defaults.removeObject(forKey: legacyTrustKey)
-        }
-        self.knownDevices = defaults.stringArray(forKey: knownKey) ?? []
+        self.knownDevices = []   // replaced below; loadKnownDevices needs self
         if let path = defaults.string(forKey: downloadDirKey) {
             self.downloadDirectory = URL(fileURLWithPath: path)
         }
@@ -124,6 +120,7 @@ final class AppModel: ObservableObject {
         self.controlAPIEnabled = defaults.bool(forKey: controlAPIKey)
         if let a = defaults.string(forKey: appearanceKey),
            let parsed = AppAppearance(rawValue: a) { self.appearance = parsed }
+        self.knownDevices = loadKnownDevices(defaults)
         self.service.delegate = self
         self.service.setReceiveDirectory(downloadDirectory)
         if startVisible { self.service.startAdvertising(deviceName: deviceName) }
@@ -302,23 +299,58 @@ final class AppModel: ObservableObject {
         return isVisible ? "arrow.2.circlepath.circle.fill" : "arrow.2.circlepath"
     }
 
-    // MARK: Known devices (display hint only — never an accept decision)
+    // MARK: Known devices
 
-    func isKnown(_ name: String) -> Bool { knownDevices.contains(name) }
+    func isKnown(_ name: String) -> Bool {
+        knownDevices.contains { $0.name == name }
+    }
 
-    func remember(_ name: String) {
-        guard !isKnown(name) else { return }
-        knownDevices.append(name)
+    /// Whether files from this sender should be accepted without asking.
+    func autoAccepts(_ name: String) -> Bool {
+        knownDevices.first { $0.name == name }?.autoAccept ?? false
+    }
+
+    /// Records a sender, optionally enabling auto-accept for it.
+    func remember(_ name: String, autoAccept: Bool = false) {
+        if let index = knownDevices.firstIndex(where: { $0.name == name }) {
+            // Only ever turn auto-accept on here; never silently off.
+            if autoAccept { knownDevices[index].autoAccept = true }
+        } else {
+            knownDevices.append(KnownDevice(name: name, autoAccept: autoAccept))
+            knownDevices.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+        persistKnown()
+    }
+
+    func setAutoAccept(_ enabled: Bool, for name: String) {
+        guard let index = knownDevices.firstIndex(where: { $0.name == name }) else { return }
+        knownDevices[index].autoAccept = enabled
         persistKnown()
     }
 
     func forget(_ name: String) {
-        knownDevices.removeAll { $0 == name }
+        knownDevices.removeAll { $0.name == name }
         persistKnown()
     }
 
     private func persistKnown() {
-        UserDefaults.standard.set(knownDevices, forKey: knownKey)
+        guard let data = try? JSONEncoder().encode(knownDevices) else { return }
+        UserDefaults.standard.set(data, forKey: knownKey)
+    }
+
+    /// Loads the list, migrating the two earlier storage shapes.
+    private func loadKnownDevices(_ defaults: UserDefaults) -> [KnownDevice] {
+        if let data = defaults.data(forKey: knownKey),
+           let decoded = try? JSONDecoder().decode([KnownDevice].self, from: data) {
+            return decoded
+        }
+        // Plain name lists from earlier builds: carry the names, leave
+        // auto-accept off so it is always a deliberate choice.
+        var migrated: [String] = defaults.stringArray(forKey: legacyNamesKey) ?? []
+        migrated += defaults.stringArray(forKey: legacyTrustKey) ?? []
+        defaults.removeObject(forKey: legacyNamesKey)
+        defaults.removeObject(forKey: legacyTrustKey)
+        return Array(Set(migrated)).sorted().map { KnownDevice(name: $0, autoAccept: false) }
     }
 
     // MARK: Intents — Receive
@@ -327,10 +359,12 @@ final class AppModel: ObservableObject {
         isVisible ? service.stopAdvertising() : service.startAdvertising(deviceName: deviceName)
     }
 
-    func respondToIncoming(accept: Bool) {
+    /// Answers the pending request. `alwaysAccept` enables auto-accept for this
+    /// sender from now on.
+    func respondToIncoming(accept: Bool, alwaysAccept: Bool = false) {
         guard let req = incomingRequest else { return }
         if accept {
-            remember(req.device.name)
+            remember(req.device.name, autoAccept: alwaysAccept)
             acceptIncoming(req)
         } else {
             service.respondToIncoming(id: req.id, accept: false)
@@ -459,12 +493,36 @@ extension AppModel: QuickShareServiceDelegate {
     }
 
     func serviceDidReceiveIncomingRequest(_ request: IncomingRequest) {
-        // Always ask. The sender's name is unauthenticated, so there is nothing
-        // here we could safely auto-accept on — see `knownDevices`.
+        if autoAccepts(request.device.name) {
+            // Opted in for this sender: take it without interrupting, but say so
+            // rather than letting files appear from nowhere.
+            acceptIncoming(request)
+            notifyAutoAccepted(request)
+            return
+        }
         incomingRequest = request
         // `NSApp` is an implicitly-unwrapped global that is nil outside a running
         // GUI app. This path is driven by network input, so don't force it.
         if let app = NSApp { app.activate(ignoringOtherApps: true) }   // surface the prompt
+    }
+
+    /// An auto-accepted transfer should still be visible to the user.
+    private func notifyAutoAccepted(_ request: IncomingRequest) {
+        // UNUserNotificationCenter.current() raises (not throws) unless the
+        // process is a real .app — `swift run` and test hosts are not. The
+        // transfer itself must not depend on being able to post a notification.
+        guard Bundle.main.bundlePath.hasSuffix(".app") else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Receiving from \(request.device.name)"
+        content.body = request.summary
+        let notification = UNNotificationRequest(identifier: request.id,
+                                                 content: content, trigger: nil)
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert]) { granted, _ in
+            guard granted else { return }
+            center.add(notification)
+        }
     }
 
     func serviceDidDiscover(_ device: RemoteDevice) {

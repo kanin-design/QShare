@@ -4,11 +4,13 @@ import SwiftUI
 /// app root, so it appears over either tab — an incoming request is never hidden.
 struct IncomingRequestSheet: View {
     let request: IncomingRequest
-    /// True when we've accepted from a device using this name before. A hint
-    /// only — the name is unauthenticated, so it never decides anything.
+    /// True when we've accepted from a device using this name before.
     let isKnown: Bool
-    let onAccept: () -> Void
+    /// Accept, and whether to auto-accept from this sender from now on.
+    let onAccept: (_ alwaysAccept: Bool) -> Void
     let onDecline: () -> Void
+
+    @State private var alwaysAccept = false
 
     var body: some View {
         VStack(spacing: Theme.Space.lg) {
@@ -32,10 +34,24 @@ struct IncomingRequestSheet: View {
             PinBadge(pin: request.pin)
 
             if isKnown {
-                Label("You've accepted from this name before", systemImage: "clock.arrow.circlepath")
+                Label("You've accepted from this device before", systemImage: "clock.arrow.circlepath")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            // Compact switch: this is a per-device choice, not a service.
+            HStack(spacing: Theme.Space.sm) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Always accept from this device").font(.callout)
+                    Text("Skip this prompt next time.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: Theme.Space.sm)
+                GlassSwitch(isOn: $alwaysAccept,
+                            label: "Always accept from \(request.device.name)",
+                            size: .compact)
+            }
+            .padding(.horizontal, 2)
 
             HStack(spacing: Theme.Space.md) {
                 Button("Decline", role: .cancel, action: onDecline)
@@ -45,7 +61,7 @@ struct IncomingRequestSheet: View {
                 // Deliberately NOT `.defaultAction`: this sheet appears
                 // unprompted and activates the app, so binding Accept to Return
                 // would let a stray keystroke accept an unsolicited transfer.
-                Button(action: onAccept) {
+                Button(action: { onAccept(alwaysAccept) }) {
                     Text("Accept").frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)

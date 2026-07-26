@@ -32,7 +32,7 @@ final class AppModelSafetyTests: XCTestCase {
         try await super.setUp()
         // AppModel persists to UserDefaults.standard; start from a clean slate so
         // tests don't inherit each other's (or the real app's) state.
-        for key in ["knownDeviceNames", "trustedDeviceNames", "controlAPIEnabled",
+        for key in ["knownDevices", "knownDeviceNames", "trustedDeviceNames", "controlAPIEnabled",
                     "startVisible", "downloadDirectoryPath", "appearance"] {
             UserDefaults.standard.removeObject(forKey: key)
         }
@@ -41,7 +41,7 @@ final class AppModelSafetyTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        for key in ["knownDeviceNames", "trustedDeviceNames", "controlAPIEnabled"] {
+        for key in ["knownDevices", "knownDeviceNames", "trustedDeviceNames", "controlAPIEnabled"] {
             UserDefaults.standard.removeObject(forKey: key)
         }
         try await super.tearDown()
@@ -53,55 +53,102 @@ final class AppModelSafetyTests: XCTestCase {
                         fileNames: ["photo.jpg"], totalBytes: 1234, pin: "1234")
     }
 
-    // MARK: The vulnerability this suite exists to prevent
+    // MARK: Auto-accept is per-device and opt-in
 
-    /// Regression: a device name previously accepted from must NOT cause a
-    /// silent auto-accept. Names are remote-supplied and unauthenticated, so
-    /// anything on the LAN could claim one.
-    func testKnownDeviceNameDoesNotAutoAccept() {
+    /// Being known is not consent. A sender you've accepted from once must still
+    /// prompt until you explicitly enable auto-accept for it.
+    func testKnownButNotAutoAcceptedStillPrompts() {
         model.remember("Pixel 8 Pro")
         XCTAssertTrue(model.isKnown("Pixel 8 Pro"))
+        XCTAssertFalse(model.autoAccepts("Pixel 8 Pro"))
 
         model.serviceDidReceiveIncomingRequest(request(from: "Pixel 8 Pro"))
 
-        XCTAssertEqual(model.incomingRequest?.device.name, "Pixel 8 Pro",
-                       "a known name must still raise the prompt")
+        XCTAssertEqual(model.incomingRequest?.device.name, "Pixel 8 Pro")
         XCTAssertTrue(spy.consentResponses.isEmpty,
                       "nothing may be accepted before the user answers")
-        XCTAssertTrue(model.transfers.isEmpty,
-                      "no transfer may start before the user answers")
+        XCTAssertTrue(model.transfers.isEmpty)
     }
 
-    func testUnknownDeviceAlsoPrompts() {
+    /// Once enabled, that sender is accepted without a prompt.
+    func testAutoAcceptEnabledSkipsThePrompt() {
+        model.remember("Pixel 8 Pro", autoAccept: true)
+
+        model.serviceDidReceiveIncomingRequest(request(from: "Pixel 8 Pro"))
+
+        XCTAssertNil(model.incomingRequest, "an auto-accepted sender must not prompt")
+        XCTAssertEqual(spy.consentResponses.map(\.accept), [true])
+        XCTAssertEqual(model.transfers.count, 1)
+        XCTAssertEqual(model.transfers.first?.direction, .incoming)
+    }
+
+    /// Auto-accept is scoped to the device it was enabled for.
+    func testAutoAcceptDoesNotLeakToOtherSenders() {
+        model.remember("Pixel 8 Pro", autoAccept: true)
+
+        model.serviceDidReceiveIncomingRequest(request(from: "Someone Else"))
+
+        XCTAssertNotNil(model.incomingRequest)
+        XCTAssertTrue(spy.consentResponses.isEmpty)
+    }
+
+    func testUnknownDevicePrompts() {
         model.serviceDidReceiveIncomingRequest(request(from: "Stranger"))
         XCTAssertNotNil(model.incomingRequest)
         XCTAssertTrue(spy.consentResponses.isEmpty)
     }
 
-    /// The legacy auto-accept list must not survive an upgrade.
-    func testLegacyTrustListIsMigratedAndCleared() {
+    func testTogglingAutoAcceptOffRestoresThePrompt() {
+        model.remember("Tablet", autoAccept: true)
+        model.setAutoAccept(false, for: "Tablet")
+
+        model.serviceDidReceiveIncomingRequest(request(from: "Tablet"))
+        XCTAssertNotNil(model.incomingRequest)
+    }
+
+    /// An upgrade must never silently switch auto-accept on: the older lists
+    /// carried no per-device choice, so the safe reading is "ask".
+    func testMigratedListsArriveWithAutoAcceptOff() {
         UserDefaults.standard.set(["Old Phone"], forKey: "trustedDeviceNames")
+        UserDefaults.standard.set(["Older Phone"], forKey: "knownDeviceNames")
         let fresh = AppModel(service: SpyService())
 
-        XCTAssertNil(UserDefaults.standard.stringArray(forKey: "trustedDeviceNames"),
-                     "the old auto-accept key must be removed")
-        XCTAssertTrue(fresh.isKnown("Old Phone"), "the name is kept as a hint")
+        XCTAssertTrue(fresh.isKnown("Old Phone"))
+        XCTAssertTrue(fresh.isKnown("Older Phone"))
+        XCTAssertFalse(fresh.autoAccepts("Old Phone"), "migration must not enable auto-accept")
+        XCTAssertFalse(fresh.autoAccepts("Older Phone"), "migration must not enable auto-accept")
 
-        fresh.serviceDidReceiveIncomingRequest(request(from: "Old Phone"))
-        XCTAssertNotNil(fresh.incomingRequest, "migrated names must not auto-accept")
+        XCTAssertNil(UserDefaults.standard.stringArray(forKey: "trustedDeviceNames"),
+                     "legacy key should be cleared")
+        XCTAssertNil(UserDefaults.standard.stringArray(forKey: "knownDeviceNames"),
+                     "legacy key should be cleared")
     }
 
     // MARK: Consent bookkeeping
 
-    func testAcceptingRecordsTheNameAndStartsTheTransfer() {
+    func testAcceptingRecordsTheSender() {
         model.serviceDidReceiveIncomingRequest(request(from: "Galaxy S24"))
         model.respondToIncoming(accept: true)
 
         XCTAssertEqual(spy.consentResponses.map(\.accept), [true])
         XCTAssertTrue(model.isKnown("Galaxy S24"))
+        XCTAssertFalse(model.autoAccepts("Galaxy S24"),
+                       "a plain accept must not enable auto-accept")
         XCTAssertEqual(model.transfers.count, 1)
-        XCTAssertEqual(model.transfers.first?.direction, .incoming)
         XCTAssertNil(model.incomingRequest)
+    }
+
+    /// Ticking "always accept" on the prompt enables it for that sender.
+    func testAcceptingWithAlwaysEnablesAutoAccept() {
+        model.serviceDidReceiveIncomingRequest(request(from: "Galaxy S24"))
+        model.respondToIncoming(accept: true, alwaysAccept: true)
+
+        XCTAssertTrue(model.autoAccepts("Galaxy S24"))
+
+        // The next transfer from that name goes straight through.
+        model.serviceDidReceiveIncomingRequest(request(from: "Galaxy S24", id: "t2"))
+        XCTAssertNil(model.incomingRequest)
+        XCTAssertEqual(spy.consentResponses.map(\.accept), [true, true])
     }
 
     func testDecliningDoesNotRecordOrStartATransfer() {
@@ -114,16 +161,25 @@ final class AppModelSafetyTests: XCTestCase {
         XCTAssertNil(model.incomingRequest)
     }
 
-    func testForgettingRemovesTheHint() {
-        model.remember("Tablet")
+    func testForgettingRemovesTheSender() {
+        model.remember("Tablet", autoAccept: true)
         model.forget("Tablet")
         XCTAssertFalse(model.isKnown("Tablet"))
+        XCTAssertFalse(model.autoAccepts("Tablet"))
     }
 
-    func testRememberIsIdempotent() {
-        model.remember("Phone")
-        model.remember("Phone")
-        XCTAssertEqual(model.knownDevices.filter { $0 == "Phone" }.count, 1)
+    func testRememberIsIdempotentAndNeverDowngrades() {
+        model.remember("Phone", autoAccept: true)
+        model.remember("Phone")   // a later plain accept must not turn it off
+        XCTAssertEqual(model.knownDevices.filter { $0.name == "Phone" }.count, 1)
+        XCTAssertTrue(model.autoAccepts("Phone"))
+    }
+
+    func testKnownDevicesPersistAcrossLaunches() {
+        model.remember("Persisted", autoAccept: true)
+        let fresh = AppModel(service: SpyService())
+        XCTAssertTrue(fresh.isKnown("Persisted"))
+        XCTAssertTrue(fresh.autoAccepts("Persisted"))
     }
 
     // MARK: CLI must not hijack the window's send flow

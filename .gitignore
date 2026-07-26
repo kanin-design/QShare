@@ -11,3 +11,4 @@ App/build/
 
 # Claude Code local settings
 .claude/settings.local.json
+App/Packaging/.build-number

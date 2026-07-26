@@ -11,8 +11,7 @@ struct SettingsView: View {
             VStack(spacing: Theme.Space.lg) {
                 downloadsCard
                 appearanceCard
-                receivingCard
-                automationCard
+                servicesCard
                 knownCard
             }
             .padding(Theme.Space.lg)
@@ -58,40 +57,28 @@ struct SettingsView: View {
         }
     }
 
-    private var receivingCard: some View {
+    /// Both background services in one card, sharing one row component so they
+    /// line up exactly.
+    private var servicesCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("Receiving").cardTitle()
-                HStack {
-                    Text("Be visible on launch").primaryStyle()
-                    Spacer()
-                    GlassSwitch(isOn: Binding(
-                        get: { model.startVisible },
-                        set: { model.setStartVisible($0) }
-                    ), label: "Be visible on launch")
-                }
-            }
-        }
-    }
+                Text("Services").cardTitle()
 
-    private var automationCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("Automation").cardTitle()
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Allow the qshare command line").primaryStyle()
-                        Text("Serves a local API on 127.0.0.1:\(String(ControlServer.port)).")
-                            .secondaryStyle()
-                    }
-                    Spacer()
-                    GlassSwitch(isOn: Binding(
-                        get: { model.controlAPIEnabled },
-                        set: { model.setControlAPIEnabled($0) }
-                    ), label: "Allow the qshare command line")
-                }
-                Text("While this is on, anything running under your account can ask QShare to send any file it can read to a nearby device. Leave it off unless you use the CLI.")
-                    .secondaryStyle()
+                SettingToggleRow(
+                    title: "Be visible on launch",
+                    subtitle: "Start advertising to nearby devices at startup.",
+                    isOn: Binding(get: { model.startVisible },
+                                  set: { model.setStartVisible($0) }))
+
+                Divider().overlay(Theme.hairline)
+
+                // Named for what it is: a local HTTP server. The qshare command
+                // is one client of it, not the whole story.
+                SettingToggleRow(
+                    title: "Local API server",
+                    subtitle: "Serves 127.0.0.1:\(String(ControlServer.port)) so the qshare command can drive the app. Anything running as you can then send any file it can read.",
+                    isOn: Binding(get: { model.controlAPIEnabled },
+                                  set: { model.setControlAPIEnabled($0) }))
             }
         }
     }
@@ -99,22 +86,23 @@ struct SettingsView: View {
     private var knownCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text("Devices you've accepted from").cardTitle()
+                Text("Known senders").cardTitle()
                 if model.knownDevices.isEmpty {
-                    Text("None yet. Names appear here after you accept a transfer.")
+                    Text("Devices appear here after you accept a transfer. Turn one on to receive from it without being asked.")
                         .secondaryStyle()
                 } else {
-                    Text("Shown as a hint on incoming requests. Every transfer still needs your approval.")
+                    Text("Auto-accept files from these devices without a prompt.")
                         .secondaryStyle()
-                    ForEach(model.knownDevices, id: \.self) { name in
+                    ForEach(model.knownDevices) { device in
                         HStack(spacing: Theme.Space.sm) {
-                            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
-                            Text(name).primaryStyle()
-                            Spacer()
-                            Button("Forget") { model.forget(name) }
+                            DeviceAutoAcceptRow(
+                                name: device.name,
+                                isOn: Binding(
+                                    get: { device.autoAccept },
+                                    set: { model.setAutoAccept($0, for: device.name) }))
+                            Button("Forget") { model.forget(device.name) }
                                 .controlSize(.small)
                         }
-                        .padding(.vertical, 1)
                     }
                 }
             }

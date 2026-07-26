@@ -59,17 +59,32 @@ struct GlassSwitch: View {
     /// What this switch controls — the switch is used for several settings now,
     /// so the label can't be baked in.
     var label: String
+    /// Per-item switches (one device in a list) read as subordinate to the
+    /// service-level ones, so they're drawn smaller.
+    var size: Size = .regular
     var onColor: Color = Theme.success
     var offColor: Color = Color(red: 0.85, green: 0.29, blue: 0.29)
 
+    enum Size {
+        case regular, compact
+        var dimensions: CGSize {
+            switch self {
+            case .regular: return CGSize(width: 40, height: 24)
+            case .compact: return CGSize(width: 32, height: 19)
+            }
+        }
+        var knobInset: CGFloat { self == .regular ? 2 : 1.5 }
+    }
+
     var body: some View {
+        let box = size.dimensions
         Capsule()
             .fill(isOn ? AnyShapeStyle(onColor) : AnyShapeStyle(offColor))
-            .frame(width: 40, height: 24)
+            .frame(width: box.width, height: box.height)
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()
                     .fill(.white)
-                    .padding(2)
+                    .padding(size.knobInset)
                     .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isOn)
@@ -78,6 +93,52 @@ struct GlassSwitch: View {
             .accessibilityElement()
             .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
             .accessibilityLabel(label)
+    }
+}
+
+/// One switchable setting: title, explanatory subline, switch.
+///
+/// A single component rather than repeated layout, so every row in Settings is
+/// identical by construction instead of by careful copy-paste.
+struct SettingToggleRow: View {
+    let title: String
+    let subtitle: String
+    @Binding var isOn: Bool
+    var size: GlassSwitch.Size = .regular
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Theme.Space.md) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).primaryStyle()
+                Text(subtitle).secondaryStyle()
+            }
+            Spacer(minLength: Theme.Space.md)
+            GlassSwitch(isOn: $isOn, label: title, size: size)
+        }
+        .frame(minHeight: size == .regular ? 40 : 32)
+    }
+}
+
+/// One known sender with its auto-accept switch. Uses the compact switch: it
+/// governs a single device, not a service.
+struct DeviceAutoAcceptRow: View {
+    let name: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: Theme.Space.sm) {
+            Image(systemName: isOn ? "checkmark.shield.fill" : "iphone.gen3")
+                .font(.system(size: 12))
+                .foregroundStyle(isOn ? Theme.success : .secondary)
+                .frame(width: 16)
+            Text(name).primaryStyle().lineLimit(1)
+            Spacer(minLength: Theme.Space.sm)
+            Text(isOn ? "Auto" : "Ask")
+                .secondaryStyle()
+                .monospacedDigit()
+            GlassSwitch(isOn: $isOn, label: "Auto-accept from \(name)", size: .compact)
+        }
+        .frame(minHeight: 32)
     }
 }
 

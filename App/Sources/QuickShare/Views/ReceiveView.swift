@@ -27,24 +27,17 @@ struct ReceiveView: View {
     private var knownDevices: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text("Devices you've accepted from").cardTitle()
-                Text("Shown as a hint on the next request. Every transfer still needs your approval — a device name can't be verified.")
+                Text("Known senders").cardTitle()
+                Text("Turn one on to receive from it without a prompt.")
                     .secondaryStyle()
                 ScrollView {
                     VStack(spacing: Theme.Space.xs) {
-                        ForEach(model.knownDevices, id: \.self) { name in
-                            HStack(spacing: Theme.Space.sm) {
-                                Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
-                                Text(name).primaryStyle()
-                                Spacer()
-                                Button {
-                                    model.forget(name)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("Forget \(name)")
-                            }
+                        ForEach(model.knownDevices) { device in
+                            DeviceAutoAcceptRow(
+                                name: device.name,
+                                isOn: Binding(
+                                    get: { device.autoAccept },
+                                    set: { model.setAutoAccept($0, for: device.name) }))
                         }
                     }
                 }
