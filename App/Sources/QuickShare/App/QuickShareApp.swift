@@ -12,10 +12,14 @@ struct QuickShareApp: App {
         Window("QShare", id: "main") {
             RootView()
                 .environmentObject(model)
-                .frame(minWidth: 420, minHeight: 520)   // min only → content fills any larger size
+                // A single-column utility: it has one sensible width and a bit of
+                // slack either side. Height stays free — that's where transfers
+                // accumulate.
+                .frame(minWidth: 440, idealWidth: 460, maxWidth: 620,
+                       minHeight: 520)
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentMinSize)   // freely resizable; content fills + scrolls
+        .windowResizability(.contentSize)   // honour the width bounds above
         .defaultSize(width: 460, height: 700)
         .commands {
             // ⌘⌥I. A real menu command rather than a hidden button: it works
