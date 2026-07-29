@@ -30,12 +30,18 @@ enum WindowPlacement {
         targetWindow()?.center()
     }
 
-    /// The window the commands should act on: whatever the user is looking at,
-    /// falling back to the main window when focus is elsewhere (a sheet, or the
-    /// menu bar itself).
+    /// Identifier of the `Window(id:)` scene in `QuickShareApp`.
+    private static let mainWindowID = "main"
+
+    /// The main window, identified explicitly.
+    ///
+    /// Matching on identifier rather than "first visible non-panel": the app
+    /// also owns an `NSStatusBarWindow` for the menu-bar item, which is not an
+    /// `NSPanel` and would otherwise be a candidate — snapping the status item
+    /// to the side of the screen is not what anyone wants. It also keeps
+    /// Settings out of scope, whatever class SwiftUI gives it.
     private static func targetWindow() -> NSWindow? {
-        if let key = NSApp.keyWindow, key.isVisible, !(key is NSPanel) { return key }
-        return NSApp.windows.first { $0.isVisible && !($0 is NSPanel) }
+        NSApp.windows.first { $0.identifier?.rawValue == mainWindowID && $0.isVisible }
     }
 
     private static func screen(for window: NSWindow) -> NSScreen? {

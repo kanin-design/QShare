@@ -6,9 +6,6 @@ struct RemoteDevice: Identifiable, Hashable {
     let id: String
     var name: String
     var type: DeviceType
-
-    /// True once we've completed a secure handshake with this peer in this session.
-    var isReachable: Bool = true
 }
 
 enum DeviceType: String, CaseIterable {

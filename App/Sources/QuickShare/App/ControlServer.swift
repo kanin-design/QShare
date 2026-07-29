@@ -38,10 +38,30 @@ final class ControlServer {
             // Defense in depth: only ever serve loopback peers.
             guard Self.isLoopback(conn.endpoint) else { conn.cancel(); return }
             conn.start(queue: .main)
-            MainActor.assumeIsolated { self?.receive(conn, buffer: Data()) }
+            MainActor.assumeIsolated {
+                self?.armIdleTimeout(conn)
+                self?.receive(conn, buffer: Data())
+            }
         }
         l.start(queue: .main)
     }
+
+    /// A client that connects and then says nothing must not hold the socket
+    /// open indefinitely. `/send` blocks for as long as a transfer takes, so
+    /// this only bounds the time to deliver a *complete request*.
+    private static let requestTimeout: TimeInterval = 30
+
+    private func armIdleTimeout(_ conn: NWConnection) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.requestTimeout) { [weak self] in
+            guard let self, self.pendingConnections.contains(ObjectIdentifier(conn)) else { return }
+            self.pendingConnections.remove(ObjectIdentifier(conn))
+            conn.cancel()
+        }
+        pendingConnections.insert(ObjectIdentifier(conn))
+    }
+
+    /// Connections whose request hasn't fully arrived yet.
+    private var pendingConnections: Set<ObjectIdentifier> = []
 
     /// Tear the listener down (the API is user-toggleable). In-flight
     /// connections are dropped; parked CLI sends are released by the caller.
@@ -60,10 +80,14 @@ final class ControlServer {
                 if let data { buf.append(data) }
                 guard buf.count <= Self.maxRequestBytes else { conn.cancel(); return }   // cap memory
                 if let req = HTTPRequest(buf) {
+                    // Request is complete; the idle timer has done its job and
+                    // must not fire during a long-running /send.
+                    self.pendingConnections.remove(ObjectIdentifier(conn))
                     self.route(req) { response in
                         conn.send(content: response, completion: .contentProcessed { _ in conn.cancel() })
                     }
                 } else if isComplete || error != nil {
+                    self.pendingConnections.remove(ObjectIdentifier(conn))
                     conn.cancel()
                 } else {
                     self.receive(conn, buffer: buf)   // keep reading (incomplete body)

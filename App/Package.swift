@@ -30,7 +30,7 @@ let package = Package(
         ),
         .testTarget(
             name: "QuickShareTests",
-            dependencies: ["QuickShare"],
+            dependencies: ["QuickShare", "QuickShareProtocol"],
             path: "Tests/QuickShareTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

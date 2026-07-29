@@ -18,6 +18,7 @@ public actor OutboundSession {
 
     private var secure: SecureChannel?
     private var continuation: AsyncStream<OutboundEvent>.Continuation?
+    private var started = false
     private var finished = false
     private var cancelled = false
 
@@ -58,9 +59,23 @@ public actor OutboundSession {
         self.localEndpointID = localEndpointID
     }
 
+    /// Runs the session. The stream finishes when the transfer ends.
+    ///
+    /// Callable once. A second call would replace the event continuation and
+    /// start a second handshake on a socket already in use, so it hands back an
+    /// already-finished stream instead.
     public func events() -> AsyncStream<OutboundEvent> {
-        AsyncStream { continuation in
+        guard !started else { return AsyncStream { $0.finish() } }
+        started = true
+        return AsyncStream { continuation in
             self.continuation = continuation
+            // Only when the consumer walks away — `.finished` also fires here,
+            // and cancelling then would send a cancel frame after a transfer
+            // that already succeeded.
+            continuation.onTermination = { [weak self] reason in
+                guard case .cancelled = reason else { return }
+                Task { await self?.cancel() }
+            }
             Task { await self.run() }
         }
     }

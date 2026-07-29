@@ -28,6 +28,7 @@ public actor InboundSession {
 
     private var consent: CheckedContinuation<Bool, Never>?
     private var continuation: AsyncStream<InboundEvent>.Continuation?
+    private var started = false
     private var finished = false
 
     private struct PendingFile {
@@ -44,9 +45,23 @@ public actor InboundSession {
     }
 
     /// Runs the session. The stream finishes when the transfer ends.
+    /// Runs the session. The stream finishes when the transfer ends.
+    ///
+    /// Callable once. A second call would replace the event continuation and
+    /// start a second handshake on a socket already in use, so it hands back an
+    /// already-finished stream instead.
     public func events() -> AsyncStream<InboundEvent> {
-        AsyncStream { continuation in
+        guard !started else { return AsyncStream { $0.finish() } }
+        started = true
+        return AsyncStream { continuation in
             self.continuation = continuation
+            // Only when the consumer walks away — `.finished` also fires here,
+            // and cancelling then would send a cancel frame after a transfer
+            // that already succeeded.
+            continuation.onTermination = { [weak self] reason in
+                guard case .cancelled = reason else { return }
+                Task { await self?.cancel() }
+            }
             Task { await self.run() }
         }
     }

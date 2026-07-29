@@ -1,18 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// The app's logo mark — renders the actual app icon (from AppIcon.icns), so
-/// updating the .icns updates every logo in the UI automatically.
-struct BrandMark: View {
-    var size: CGFloat = 28
-    var body: some View {
-        Image(nsImage: NSApplication.shared.applicationIconImage)
-            .resizable()
-            .interpolation(.high)
-            .frame(width: size, height: size)
-    }
-}
-
 /// Small uppercase section header, optionally with a trailing accessory.
 struct SectionHeader: View {
     let title: String

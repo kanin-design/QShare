@@ -151,12 +151,12 @@ public struct SecureMessageCodec: Sendable {
 extension Data {
     /// Cryptographically secure random bytes.
     static func secureRandom(count: Int) -> Data {
-        var bytes = [UInt8](repeating: 0, count: count)
+        guard count > 0 else { return Data() }
         // SystemRandomNumberGenerator is documented as cryptographically secure
         // on Apple platforms and, unlike SecRandomCopyBytes, gives us no status
-        // code to mishandle.
+        // code to mishandle. Drawn 64 bits at a time rather than per byte.
         var rng = SystemRandomNumberGenerator()
-        for i in 0..<count { bytes[i] = UInt8.random(in: 0...255, using: &rng) }
-        return Data(bytes)
+        let words = (0..<((count + 7) / 8)).map { _ in rng.next() as UInt64 }
+        return words.withUnsafeBytes { Data($0.prefix(count)) }
     }
 }

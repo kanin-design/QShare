@@ -8,7 +8,6 @@ enum Theme {
 
     // MARK: Color
     static let accent = Color(red: 0.16, green: 0.51, blue: 0.96)
-    static let accentSecondary = Color(red: 0.35, green: 0.78, blue: 0.98)
     static let success = Color(red: 0.20, green: 0.72, blue: 0.44)
     static let danger = Color(red: 0.90, green: 0.32, blue: 0.32)
 
@@ -49,11 +48,6 @@ enum Theme {
         static let control: CGFloat = 8
     }
 
-    /// Brand gradient — used only for the small logo mark.
-    static var brandGradient: LinearGradient {
-        LinearGradient(colors: [accent, accentSecondary],
-                       startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
 }
 
 // MARK: - Typography (the whole system — three styles, nothing else)

@@ -106,7 +106,6 @@ final class AppModel: ObservableObject {
 
     /// Recently transferred files, newest first, for the File menu.
     @Published var recentFiles: [RecentFile] = []
-    private let recentFilesKey = "recentFiles"
     private static let maxRecentFiles = 10
 
     /// Senders we've accepted from before, and whether to auto-accept from them.
@@ -122,10 +121,6 @@ final class AppModel: ObservableObject {
     /// why auto-accepted transfers still post a notification instead of landing
     /// silently.
     @Published var knownDevices: [KnownDevice] = []
-    private let knownKey = "knownDevices"
-    /// Earlier shapes of this list, migrated on launch.
-    private let legacyNamesKey = "knownDeviceNames"
-    private let legacyTrustKey = "trustedDeviceNames"
 
     // Settings (persisted)
     @Published var downloadDirectory: URL = AppModel.defaultDownloadDirectory()
@@ -134,12 +129,9 @@ final class AppModel: ObservableObject {
     /// Localhost control API for the `qshare` CLI. Off by default: it can read
     /// any path the user can and push it to a nearby device, so it's opt-in.
     @Published var controlAPIEnabled: Bool = false
-    private let downloadDirKey = "downloadDirectoryPath"
-    private let startVisibleKey = "startVisible"
-    private let appearanceKey = "appearance"
-    private let controlAPIKey = "controlAPIEnabled"
 
     private let service: QuickShareService
+    private let prefs = Preferences()
 
     init(service: QuickShareService? = nil) {
         // Defaults to the real engine. Set QS_MOCK=1 for the simulated engine.
@@ -150,20 +142,12 @@ final class AppModel: ObservableObject {
         } else {
             self.service = NearbyQuickShareService()
         }
-        let defaults = UserDefaults.standard
-        self.knownDevices = []   // replaced below; loadKnownDevices needs self
-        if let path = defaults.string(forKey: downloadDirKey) {
-            self.downloadDirectory = URL(fileURLWithPath: path)
-        }
-        self.startVisible = defaults.bool(forKey: startVisibleKey)
-        self.controlAPIEnabled = defaults.bool(forKey: controlAPIKey)
-        if let a = defaults.string(forKey: appearanceKey),
-           let parsed = AppAppearance(rawValue: a) { self.appearance = parsed }
-        self.knownDevices = loadKnownDevices(defaults)
-        if let data = defaults.data(forKey: recentFilesKey),
-           let decoded = try? JSONDecoder().decode([RecentFile].self, from: data) {
-            self.recentFiles = decoded
-        }
+        if let saved = prefs.downloadDirectory { self.downloadDirectory = saved }
+        self.startVisible = prefs.startVisible
+        self.controlAPIEnabled = prefs.controlAPIEnabled
+        self.appearance = prefs.appearance
+        self.knownDevices = prefs.loadKnownDevices()
+        self.recentFiles = prefs.loadRecentFiles()
         self.service.delegate = self
         self.service.setReceiveDirectory(downloadDirectory)
         if startVisible {
@@ -176,48 +160,8 @@ final class AppModel: ObservableObject {
 
         if ProcessInfo.processInfo.environment["QS_MOCK"] != nil {
             deviceName = "MacBook Pro"   // neutral name for demo screenshots
-            seedDemoTransfers()
+            transfers = DemoData.transfers()
         }
-    }
-
-    /// Neutral, demo-safe sample transfers (no real filenames, people, or devices)
-    /// so QS_MOCK=1 is presentable for screenshots.
-    private func seedDemoTransfers() {
-        let dl = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        func file(_ n: String) -> TransferFile { TransferFile(name: n, url: dl.appendingPathComponent(n)) }
-
-        let devices = ["Pixel 8 Pro", "Galaxy S24", "Galaxy Tab S9"]
-        // (filename, direction, bytes) — newest first
-        let items: [(String, TransferDirection, Int64)] = [
-            ("Mountain-sunset.jpg", .outgoing,  1_800_000),
-            ("Release-notes.pdf",   .incoming,    320_000),
-            ("IMG_2481.heic",       .outgoing,  4_500_000),
-            ("Product-demo.mp4",    .incoming, 58_000_000),
-            ("Ambient-loop.mp3",    .outgoing,  6_200_000),
-            ("Screenshot.png",      .incoming,    980_000),
-            ("Design-assets.zip",   .outgoing, 24_000_000),
-            ("Slides.key",          .incoming, 12_400_000),
-        ]
-        var demo: [ActiveTransfer] = items.enumerated().map { i, it in
-            ActiveTransfer(id: "demo-\(i)", direction: it.1, deviceName: devices[i % devices.count],
-                           title: it.0, totalBytes: it.2, fraction: 1, phase: .completed, files: [file(it.0)])
-        }
-
-        // One in-progress transfer at the top for a richer screenshot.
-        demo.insert(ActiveTransfer(id: "demo-live", direction: .outgoing, deviceName: "Pixel 8 Pro",
-                                   title: "Travel-video.mov", totalBytes: 84_000_000, fraction: 0.62,
-                                   phase: .transferring, files: [file("Travel-video.mov")]), at: 0)
-
-        // Two multi-file groups (one sent, one received).
-        let g1 = ["Beach-01.jpg", "Beach-02.jpg", "Beach-03.jpg"]
-        demo.append(ActiveTransfer(id: "demo-g1", direction: .outgoing, deviceName: "Galaxy Tab S9",
-                                   title: "3 files", totalBytes: 8_400_000, fraction: 1,
-                                   phase: .completed, files: g1.map(file)))
-        let g2 = ["Clip-01.mp4", "Clip-02.mp4", "Voice-note.m4a", "Cover.png", "Readme.txt"]
-        demo.append(ActiveTransfer(id: "demo-g2", direction: .incoming, deviceName: "Galaxy S24",
-                                   title: "5 files", totalBytes: 210_000_000, fraction: 1,
-                                   phase: .completed, files: g2.map(file)))
-        transfers = demo
     }
 
     // MARK: CLI / control API
@@ -299,18 +243,18 @@ final class AppModel: ObservableObject {
 
     func setDownloadDirectory(_ url: URL) {
         downloadDirectory = url
-        UserDefaults.standard.set(url.path, forKey: downloadDirKey)
+        prefs.downloadDirectory = url
         service.setReceiveDirectory(url)
     }
 
     func setStartVisible(_ on: Bool) {
         startVisible = on
-        UserDefaults.standard.set(on, forKey: startVisibleKey)
+        prefs.startVisible = on
     }
 
     func setControlAPIEnabled(_ on: Bool) {
         controlAPIEnabled = on
-        UserDefaults.standard.set(on, forKey: controlAPIKey)
+        prefs.controlAPIEnabled = on
         if on {
             startControlServer()
         } else {
@@ -330,7 +274,7 @@ final class AppModel: ObservableObject {
 
     func setAppearance(_ a: AppAppearance) {
         appearance = a
-        UserDefaults.standard.set(a.rawValue, forKey: appearanceKey)
+        prefs.appearance = a
     }
 
     private static func defaultDownloadDirectory() -> URL {
@@ -372,10 +316,7 @@ final class AppModel: ObservableObject {
         persistRecentFiles()
     }
 
-    private func persistRecentFiles() {
-        guard let data = try? JSONEncoder().encode(recentFiles) else { return }
-        UserDefaults.standard.set(data, forKey: recentFilesKey)
-    }
+    private func persistRecentFiles() { prefs.save(recentFiles: recentFiles) }
 
     func openRecentFile(_ file: RecentFile) {
         guard file.stillExists else {
@@ -425,25 +366,8 @@ final class AppModel: ObservableObject {
         persistKnown()
     }
 
-    private func persistKnown() {
-        guard let data = try? JSONEncoder().encode(knownDevices) else { return }
-        UserDefaults.standard.set(data, forKey: knownKey)
-    }
+    private func persistKnown() { prefs.save(knownDevices: knownDevices) }
 
-    /// Loads the list, migrating the two earlier storage shapes.
-    private func loadKnownDevices(_ defaults: UserDefaults) -> [KnownDevice] {
-        if let data = defaults.data(forKey: knownKey),
-           let decoded = try? JSONDecoder().decode([KnownDevice].self, from: data) {
-            return decoded
-        }
-        // Plain name lists from earlier builds: carry the names, leave
-        // auto-accept off so it is always a deliberate choice.
-        var migrated: [String] = defaults.stringArray(forKey: legacyNamesKey) ?? []
-        migrated += defaults.stringArray(forKey: legacyTrustKey) ?? []
-        defaults.removeObject(forKey: legacyNamesKey)
-        defaults.removeObject(forKey: legacyTrustKey)
-        return Array(Set(migrated)).sorted().map { KnownDevice(name: $0, autoAccept: false) }
-    }
 
     // MARK: Intents — Receive
 
@@ -504,12 +428,9 @@ final class AppModel: ObservableObject {
 
     // MARK: Intents — Send
 
-    func startDiscovery() {
-        discoveredDevices = []
-        service.startDiscovery()
-    }
-
-    func stopDiscovery() { service.stopDiscovery() }
+    // Discovery is deliberately always on — it starts in `init` and runs until
+    // quit, so the menu-bar device list is current whenever it's opened. There
+    // are no start/stop intents because nothing should be turning it off.
 
     /// Pick a listed device to send to. Opens the file staging UI.
     func selectDevice(_ device: RemoteDevice) {
