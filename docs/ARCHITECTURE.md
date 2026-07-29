@@ -60,7 +60,9 @@ real wrapper is mechanical:
 | `sendFiles` | `OutboundNearbyConnection` |
 | `serviceDidUpdateProgress` / `serviceDidFinishTransfer` | `transferProgress` / `transferFinished` |
 
-## Protocol facts (from NearDrop's PROTOCOL.md)
+## Protocol facts
+
+From @grishka's specification — see [grishka/NearDrop](https://github.com/grishka/NearDrop).
 
 - **Discovery:** mDNS service type `_FC9F5ED42C8A._tcp.`, TXT `n=` base64 endpoint info.
 - **Transport:** TCP, 4-byte big-endian length-prefixed protobuf frames.

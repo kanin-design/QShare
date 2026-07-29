@@ -182,11 +182,14 @@ Not yet:
 
 ## Credits
 
-The Quick Share protocol was reverse-engineered by
-**[grishka/NearDrop](https://github.com/grishka/NearDrop)**, released into the
-public domain. QShare's implementation is its own, written against that
-specification — see **[ATTRIBUTION.md](ATTRIBUTION.md)** for what that means in
-detail. The write-up itself is preserved in `Resources/NearDrop/`.
+Quick Share is undocumented. The protocol was reverse-engineered and specified
+by **@grishka**, published at
+**[grishka/NearDrop](https://github.com/grishka/NearDrop)** and released into
+the public domain.
+
+QShare implements the protocol from that specification — the code here is its
+own, but the knowledge isn't. See **[ATTRIBUTION.md](ATTRIBUTION.md)** for
+detail.
 
 Not affiliated with or endorsed by Google. "Quick Share" and "Nearby Share" are
 their trademarks.
