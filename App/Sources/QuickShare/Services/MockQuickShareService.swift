@@ -3,8 +3,8 @@ import Foundation
 /// Fake engine that drives the dummy UI through every state with realistic
 /// timing, so the interface can be reviewed before the real protocol lands.
 ///
-/// Nothing here touches the network. Replace with the NearDrop-backed
-/// implementation and delete this file.
+/// Nothing here touches the network. Enabled with `QS_MOCK=1`; the real
+/// engine is `NearbyQuickShareService`.
 @MainActor
 final class MockQuickShareService: QuickShareService {
     weak var delegate: QuickShareServiceDelegate?

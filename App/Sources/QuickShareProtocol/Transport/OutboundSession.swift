@@ -99,6 +99,10 @@ public actor OutboundSession {
         request.endpointID = localEndpointID
         request.endpointName = localName
         request.endpointInfo = EndpointInfo(name: localName, deviceType: .computer).serialized()
+        // Declare the transport. The reference implementation sent this and it
+        // was dropped in the rewrite; leaving it out is an unexplained
+        // divergence on a path that talks to Android.
+        request.mediums = [.wifiLan]
         var v1 = V1Frame()
         v1.type = .connectionRequest
         v1.connectionRequest = request

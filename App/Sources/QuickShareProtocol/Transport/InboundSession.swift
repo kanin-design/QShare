@@ -22,6 +22,10 @@ public actor InboundSession {
     private var totalExpectedBytes: Int64 = 0
     private var totalReceivedBytes: Int64 = 0
 
+    /// Set once a text/link offer is accepted, so `receiveLoop` knows the bytes
+    /// payload with this id is the shared text and not something to ignore.
+    private var expectedTextPayload: (id: Int64, title: String, isLink: Bool)?
+
     private var consent: CheckedContinuation<Bool, Never>?
     private var continuation: AsyncStream<InboundEvent>.Continuation?
     private var finished = false
@@ -206,13 +210,22 @@ public actor InboundSession {
             throw QuickShareError.internalFailure("session not ready")
         }
 
-        // Text-only offers (a shared link) are surfaced but not written to disk.
+        // A shared link or snippet of text. It arrives as a bytes payload rather
+        // than a file payload, so it needs its own path — previously this
+        // accepted the offer and then dropped the payload on the floor, which
+        // told the sender it had worked while producing nothing.
         if introduction.fileMetadata.isEmpty, let text = introduction.textMetadata.first {
+            guard let payloadID = text.payloadID else {
+                throw QuickShareError.missingField("textMetadata.payloadID")
+            }
+            let title = text.textTitle ?? "Shared text"
             let offer = IncomingOffer(id: id, device: device, files: [],
-                                      textTitle: text.textTitle ?? "Link", pinCode: pinCode)
+                                      textTitle: title, pinCode: pinCode)
             let accepted = await requestConsent(offer)
             try await secure.sendSetupFrame(.response(accepted ? .accept : .reject))
-            if !accepted { throw QuickShareError.rejected(.userRejected) }
+            guard accepted else { throw QuickShareError.rejected(.userRejected) }
+
+            expectedTextPayload = (id: payloadID, title: title, isLink: text.type == .url)
             return
         }
 
@@ -290,19 +303,71 @@ public actor InboundSession {
                 if frame.v1?.type == .cancel {
                     throw QuickShareError.rejected(.userCanceled)
                 }
+            case .bytesPayload(let payloadID, let data):
+                guard let expected = expectedTextPayload, expected.id == payloadID else {
+                    continue   // not ours; ignore rather than guess
+                }
+                expectedTextPayload = nil
+                let url = try saveSharedText(data, title: expected.title, isLink: expected.isLink)
+                savedURLs.append(url)
+                try? await secure.sendDisconnect()
+                await finish(.finished(savedFiles: savedURLs))
+                return
             case .keepAlive:
                 try await secure.sendKeepAlive(ack: true)
             case .disconnected:
-                if pendingFiles.isEmpty {
+                if pendingFiles.isEmpty && expectedTextPayload == nil {
                     await finish(.finished(savedFiles: savedURLs))
                 } else {
                     throw QuickShareError.connectionLost
                 }
                 return
-            case .bytesPayload, .ignored:
+            case .ignored:
                 continue
             }
         }
+    }
+
+    /// Test seam for `saveSharedText`, which is otherwise only reachable partway
+    /// through a live session.
+    nonisolated func saveSharedTextForTesting(_ data: Data, title: String, isLink: Bool) throws -> URL {
+        try saveSharedText(data, title: title, isLink: isLink)
+    }
+
+    /// Writes shared text to the receive folder.
+    ///
+    /// A link is saved as a `.webloc`, which Finder treats as a clickable
+    /// bookmark. Deliberately *not* opened automatically the way the reference
+    /// implementation did: with auto-accept enabled that would let a device on
+    /// the network open a URL on this Mac with no interaction at all.
+    nonisolated private func saveSharedText(_ data: Data, title: String, isLink: Bool) throws -> URL {
+        guard let contents = String(data: data, encoding: .utf8) else {
+            throw QuickShareError.protocolViolation("shared text is not valid UTF-8")
+        }
+
+        // Colons are legal in HFS names but read as path separators in Finder,
+        // so the fallback name uses dots.
+        let stamp = DateFormatter()
+        stamp.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        let fallback = "Shared text \(stamp.string(from: Date()))"
+
+        let base = ReceivedFileName.sanitize(title.isEmpty ? fallback : title)
+        let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if isLink, let link = URL(string: trimmed), link.scheme != nil {
+            let destination = try ReceivedFileName.uniqueDestination(
+                for: "\(base).webloc", in: receiveDirectory)
+            let plist = try PropertyListSerialization.data(
+                fromPropertyList: ["URL": link.absoluteString],
+                format: .xml, options: 0)
+            try plist.write(to: destination)
+            return destination
+        }
+
+        let destination = try ReceivedFileName.uniqueDestination(
+            for: "\(base).txt", in: receiveDirectory)
+        try Data(contents.utf8).write(to: destination)
+        return destination
     }
 
     private func writeChunk(header: PayloadHeader, chunk: PayloadChunk) throws {

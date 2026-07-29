@@ -70,16 +70,38 @@ public struct OsInfo: ProtoMessage {
     }
 }
 
+/// Transports a peer can be asked to upgrade to. Quick Share over LAN only ever
+/// advertises Wi-Fi.
+public enum ConnectionMedium: Int, Sendable {
+    case unknownMedium = 0
+    case mdns = 1
+    case bluetooth = 2
+    case wifiHotspot = 3
+    case bleAdvertisement = 4
+    case wifiLan = 5
+    case wifiAware = 6
+    case nfc = 7
+    case wifiDirect = 8
+    case ble = 9
+    case webRtc = 10
+}
+
 public struct ConnectionRequestFrame: ProtoMessage {
     public var endpointID: String?
     public var endpointName: String?
     public var endpointInfo: Data?
+    /// Which transports we support. Android expects this to be stated rather
+    /// than inferred, so we send `[.wifiLan]` like the reference implementation.
+    public var mediums: [ConnectionMedium] = []
 
     public init() {}
 
     public func encode(to w: inout ProtoWriter) {
         if let v = endpointID { w.write(field: 1, string: v) }
         if let v = endpointName { w.write(field: 2, string: v) }
+        // proto2 repeated enums are unpacked by default: one varint field each,
+        // not a single length-delimited block.
+        for medium in mediums { w.write(field: 5, enumValue: medium.rawValue) }
         if let v = endpointInfo { w.write(field: 6, bytes: v) }
     }
 
@@ -88,6 +110,14 @@ public struct ConnectionRequestFrame: ProtoMessage {
         switch (field, wireType) {
         case (1, .lengthDelimited): endpointID = try reader.readString()
         case (2, .lengthDelimited): endpointName = try reader.readString()
+        case (5, .varint):
+            if let m = ConnectionMedium(rawValue: Int(try reader.readInt32())) { mediums.append(m) }
+        case (5, .lengthDelimited):
+            // A peer is free to send them packed even though we don't.
+            var packed = try reader.readNested()
+            while !packed.isAtEnd {
+                if let m = ConnectionMedium(rawValue: Int(try packed.readInt32())) { mediums.append(m) }
+            }
         case (6, .lengthDelimited): endpointInfo = try reader.readBytes()
         default: return false
         }

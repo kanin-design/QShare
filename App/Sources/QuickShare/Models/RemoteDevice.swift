@@ -1,7 +1,7 @@
 import Foundation
 
 /// A device we can share with (discovered over the network) or that is sharing
-/// with us. Mirrors NearDrop's `RemoteDeviceInfo` so the real engine maps 1:1.
+/// with us. Mirrors `QuickShareDevice` in the protocol layer.
 struct RemoteDevice: Identifiable, Hashable {
     let id: String
     var name: String
