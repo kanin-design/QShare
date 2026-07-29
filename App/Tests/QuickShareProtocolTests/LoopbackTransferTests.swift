@@ -183,6 +183,60 @@ final class LoopbackTransferTests: XCTestCase {
                        "received bytes differ from what was sent")
     }
 
+    /// A successful send must not sit waiting out the settle timeout.
+    ///
+    /// The peer's close wakes us; only a peer that goes quiet without closing
+    /// should cost the full window. This pins that the fast path is fast — the
+    /// earlier polling version added up to 2s to every transfer.
+    func testSuccessfulSendCompletesPromptly() async throws {
+        let acceptor = try Acceptor()
+        try await acceptor.start()
+        defer { acceptor.stop() }
+
+        let sourceURL = try makeTempFile(bytes: 64_000, name: "quick.bin")
+        defer { try? FileManager.default.removeItem(at: sourceURL.deletingLastPathComponent()) }
+        let receiveDir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("qshare-recv-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: receiveDir) }
+
+        let clientConnection = NWConnection(
+            host: .ipv4(.loopback), port: acceptor.port, using: .tcp)
+        let outbound = OutboundSession(
+            connection: clientConnection, id: "t3",
+            files: [try OutgoingFile.from(url: sourceURL)],
+            localName: "Test Mac", localEndpointID: "ab12")
+
+        let started = Date()
+        let sendTask = Task { () -> [String] in
+            var events: [String] = []
+            for await event in await outbound.events() {
+                switch event {
+                case .finished: events.append("finished")
+                case .failed(let error): events.append("failed(\(error.userMessage))")
+                default: continue
+                }
+            }
+            return events
+        }
+
+        let serverConnection = try await acceptor.nextConnection()
+        let inbound = InboundSession(connection: serverConnection, id: "r3",
+                                     receiveDirectory: receiveDir)
+        let receiveTask = Task {
+            for await event in await inbound.events() {
+                if case .offerReceived = event { await inbound.respond(accept: true) }
+            }
+        }
+
+        let sendEvents = try await withTimeout(60) { await sendTask.value }
+        _ = try await withTimeout(60) { await receiveTask.value }
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertTrue(sendEvents.contains("finished"), "events: \(sendEvents)")
+        XCTAssertLessThan(elapsed, 1.5,
+                          "a small transfer took \(elapsed)s — the settle wait isn't being woken")
+    }
+
     /// Declining must surface as a rejection on the sender, not as success.
     func testDeclineIsReportedAsFailureNotSuccess() async throws {
         let acceptor = try Acceptor()

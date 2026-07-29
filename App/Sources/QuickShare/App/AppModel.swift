@@ -69,6 +69,13 @@ final class AppModel: ObservableObject {
     /// Set when advertising was requested but never came up.
     @Published private(set) var visibilityFailed: Bool = false
 
+    /// Notification permission is asked for at most once per launch — see
+    /// `notifyAutoAccepted`.
+    enum NotificationAuthorization {
+        case unknown, pending, granted, denied
+    }
+    private var notificationAuthorization: NotificationAuthorization = .unknown
+
     /// What to show the user about advertising.
     enum VisibilityStatus: Equatable {
         case off
@@ -605,9 +612,12 @@ extension AppModel: QuickShareServiceDelegate {
         self.isVisible = isVisible
         if isVisible {
             // It came up — cancel the pending failure check.
+            //
+            // Intent is deliberately NOT touched here. Setting it would let a
+            // late "visible" arriving during teardown flip the switch back on
+            // after the user has just turned it off.
             visibilityToken += 1
             visibilityFailed = false
-            wantsVisible = true
         } else if wantsVisible {
             // Dropped out from under us; give it the same grace as a fresh start.
             scheduleVisibilityTimeout()
@@ -635,17 +645,44 @@ extension AppModel: QuickShareServiceDelegate {
         // transfer itself must not depend on being able to post a notification.
         guard Bundle.main.bundlePath.hasSuffix(".app") else { return }
 
-        let content = UNMutableNotificationContent()
-        content.title = "Receiving from \(request.device.name)"
-        content.body = request.summary
-        let notification = UNNotificationRequest(identifier: request.id,
-                                                 content: content, trigger: nil)
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert]) { granted, _ in
-            guard granted else { return }
-            center.add(notification)
+        // Only Sendable values cross the concurrency boundary below; the
+        // notification objects themselves are built where they're used.
+        let id = request.id
+        let title = "Receiving from \(request.device.name)"
+        let body = request.summary
+
+        // Ask at most once per launch. Requesting per transfer re-prompts
+        // someone who already said no, every time a file arrives.
+        switch notificationAuthorization {
+        case .granted:
+            postNotification(id: id, title: title, body: body)
+        case .denied:
+            return
+        case .pending:
+            // A request is already in flight; this transfer goes unannounced
+            // rather than queueing a second prompt.
+            return
+        case .unknown:
+            notificationAuthorization = .pending
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { [weak self] granted, _ in
+                Task { @MainActor in
+                    self?.notificationAuthorization = granted ? .granted : .denied
+                    guard granted else { return }
+                    self?.postNotification(id: id, title: title, body: body)
+                }
+            }
         }
     }
+
+    /// Posts a notification. Called only once permission is known to be granted.
+    private func postNotification(id: String, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: id, content: content, trigger: nil))
+    }
+
 
     func serviceDidDiscover(_ device: RemoteDevice) {
         if !discoveredDevices.contains(where: { $0.id == device.id }) {

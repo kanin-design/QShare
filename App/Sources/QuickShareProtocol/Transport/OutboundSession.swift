@@ -46,6 +46,8 @@ public actor OutboundSession {
     /// instantly — anything automated, or a fast link — can be answered before
     /// the waiter exists. Dropping that signal deadlocks the send.
     private var bufferedConsent: SharingResponseStatus?
+    /// Woken when the peer reacts after the last byte — see `waitForPeerToSettle`.
+    private var settleWaiter: CheckedContinuation<Void, Never>?
 
     public init(connection: NWConnection, id: String, files: [OutgoingFile],
                 localName: String, localEndpointID: String) {
@@ -254,6 +256,7 @@ public actor OutboundSession {
             // A close before we've finished sending means it didn't land.
             if !sendingComplete { fail(.connectionLost) }
             resumeConsent(.reject)
+            signalSettled()
 
         case .fileChunk, .bytesPayload, .ignored:
             return
@@ -265,10 +268,13 @@ public actor OutboundSession {
         // Once every byte is out, the peer hanging up is the expected ending.
         if !sendingComplete { fail(error) }
         resumeConsent(.reject)
+        signalSettled()
     }
 
     private func fail(_ error: QuickShareError) {
         if peerError == nil { peerError = error }
+        // Anyone waiting on the peer's verdict has it now.
+        signalSettled()
     }
 
     private func resumeConsent(_ status: SharingResponseStatus) {
@@ -410,15 +416,37 @@ public actor OutboundSession {
         sendingComplete = true
         try? await secure.sendDisconnect()
 
-        // Give the peer a moment to object before we call this a success. It's
-        // the difference between "sent" and "the phone couldn't take it".
-        for _ in 0..<20 {
-            if peerError != nil || peerDisconnected { break }
-            try? await Task.sleep(for: .milliseconds(100))
-        }
+        // Give the peer a chance to object before calling this a success — the
+        // difference between "sent" and "the phone couldn't take it". The reader
+        // wakes us the moment it knows, so the usual case costs nothing; the
+        // timeout only applies to a peer that goes quiet without closing.
+        await waitForPeerToSettle()
         if let peerError { throw peerError }
 
         await finish(.finished)
+    }
+
+    /// How long to wait for the peer's reaction after the last byte.
+    private static let settleTimeout = Duration.seconds(2)
+
+    private func waitForPeerToSettle() async {
+        if peerError != nil || peerDisconnected { return }
+
+        let timeout = Task { [weak self] in
+            try? await Task.sleep(for: Self.settleTimeout)
+            await self?.signalSettled()
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            self.settleWaiter = continuation
+        }
+        timeout.cancel()
+    }
+
+    /// Wakes `waitForPeerToSettle`. Safe to call when nobody is waiting.
+    private func signalSettled() {
+        guard let waiter = settleWaiter else { return }
+        settleWaiter = nil
+        waiter.resume()
     }
 
     /// Best-effort content classification from the MIME type.
@@ -434,13 +462,15 @@ public actor OutboundSession {
         guard !finished else { return }
         finished = true
 
-        // Tear the reader down before closing, so it can't be left spinning on a
-        // dead socket — a leaked reader keeps the connection alive and is why a
-        // failed send could leave the device unreachable afterwards.
+        // Closing the channel is what actually releases the reader: it's parked
+        // in a continuation around an NWConnection callback, which task
+        // cancellation can't interrupt. The cancel below only stops it looping
+        // again once that callback returns.
         readerTask?.cancel()
         readerTask = nil
-        // Nothing is going to answer a pending consent wait now.
+        // Nothing is going to answer these now.
         resumeConsent(.reject)
+        signalSettled()
 
         continuation?.yield(event)
         continuation?.finish()

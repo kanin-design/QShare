@@ -262,6 +262,22 @@ final class AppModelSafetyTests: XCTestCase {
         XCTAssertEqual(model.visibilityStatus, .off)
     }
 
+    /// Regression: a late "visible" arriving during teardown must not turn the
+    /// switch back on after the user has just switched it off.
+    func testLateVisibleReportDoesNotRevertTheSwitch() {
+        model.setVisible(true)
+        model.serviceDidUpdateVisibility(isVisible: true)
+
+        model.setVisible(false)
+        XCTAssertFalse(model.wantsVisible)
+
+        // The engine hadn't finished tearing down and reports visible once more.
+        model.serviceDidUpdateVisibility(isVisible: true)
+
+        XCTAssertFalse(model.wantsVisible, "the switch flipped itself back on")
+        XCTAssertEqual(model.visibilityStatus, .stopping)
+    }
+
     /// Advertising dropping out on its own must show as pending again, not as on.
     func testLosingAdvertisingReturnsToStarting() {
         model.setVisible(true)

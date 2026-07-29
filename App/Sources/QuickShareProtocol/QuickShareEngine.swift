@@ -119,9 +119,21 @@ public final class QuickShareEngine {
 
     /// Connects to `device` and offers `files`. The transfer id is returned so
     /// the caller can correlate events and cancel.
+    ///
+    /// The id is the device id, which means one in-flight transfer per device.
+    /// That invariant is enforced below rather than assumed: without the guard a
+    /// second send would overwrite the first session in the map, so cancelling
+    /// would reach the wrong one and the first would leak. Supporting genuinely
+    /// concurrent transfers to a single device would mean giving each its own id
+    /// and threading that through the app's transfer rows.
     @discardableResult
     public func send(files: [OutgoingFile], to device: QuickShareDevice) -> String {
         let transferID = device.id
+        guard outboundSessions[transferID] == nil else {
+            onOutgoingEvent?(transferID,
+                             .failed(.localFailure("already sending to \(device.name)")))
+            return transferID
+        }
         guard let endpoint = browser.endpoint(for: device.id) else {
             onOutgoingEvent?(transferID, .failed(.localFailure("device is no longer reachable")))
             return transferID
