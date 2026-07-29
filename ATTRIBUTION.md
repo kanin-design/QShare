@@ -29,6 +29,11 @@ The message definitions descend from Google's `securemessage.proto`,
 `wire_format.proto` (Apache-2.0). QShare does not vendor the generated code; it
 implements by hand only the ~32 messages the protocol actually exchanges.
 
+## QShare's own licence
+
+QShare is released under [0BSD](LICENSE) — the same practical freedom the
+protocol specification was given, expressed as an ordinary copyright licence.
+
 ## Dependencies
 
 None. QShare builds against Foundation, Network, CryptoKit, CommonCrypto,

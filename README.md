@@ -9,6 +9,7 @@
   <img alt="Platform: macOS 26+" src="https://img.shields.io/badge/platform-macOS%2026%2B-1d2b40">
   <img alt="Swift 6" src="https://img.shields.io/badge/swift-6.3-1d2b40">
   <img alt="Dependencies: none" src="https://img.shields.io/badge/dependencies-none-2a9d5c">
+  <img alt="License: 0BSD" src="https://img.shields.io/badge/license-0BSD-1d2b40">
 </p>
 
 <p align="center">
@@ -142,7 +143,7 @@ protocol details worth knowing.
 
 ```bash
 cd App
-swift test                              # 137 tests
+swift test                              # 150 tests
 swift test --sanitize=thread            # concurrency
 QS_MOCK=1 swift run QuickShare          # UI work without a phone
 ```
@@ -193,3 +194,8 @@ detail.
 
 Not affiliated with or endorsed by Google. "Quick Share" and "Nearby Share" are
 their trademarks.
+
+## License
+
+[0BSD](LICENSE) — use it, change it, ship it, sell it. No attribution required,
+no conditions attached. In the spirit of the work it's built on.
