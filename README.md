@@ -8,6 +8,12 @@ discovery/advertising, UKEY2 handshake, secure messages and payload transfer —
 with **no third-party dependencies**. A **mock engine** is available for UI work
 without an Android device (`QS_MOCK=1`).
 
+<p align="center">
+  <img src="docs/screenshots/send.png" alt="QShare Send: nearby devices and transfers" width="380">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/receive.png" alt="QShare Receive: visibility, setup steps and known senders" width="380">
+</p>
+
 ## Layout
 
 ```
