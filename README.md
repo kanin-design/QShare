@@ -1,107 +1,192 @@
-# QShare
-
-A native macOS app for **Quick Share** (Google's Nearby Share) — send and receive
-files to/from nearby Android devices over Wi-Fi LAN.
-
-The Quick Share protocol is **implemented here from scratch** — mDNS
-discovery/advertising, UKEY2 handshake, secure messages and payload transfer —
-with **no third-party dependencies**. A **mock engine** is available for UI work
-without an Android device (`QS_MOCK=1`).
+<h1 align="center">QShare</h1>
 
 <p align="center">
-  <img src="docs/screenshots/send.jpg" alt="QShare Send: nearby devices and transfers" width="380">
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/receive.jpg" alt="QShare Receive: visibility, setup steps and known senders" width="380">
+  Send and receive files between your Mac and nearby Android devices,<br>
+  using Google's <b>Quick Share</b> — implemented from scratch, with zero dependencies.
 </p>
 
-## Layout
+<p align="center">
+  <img alt="Platform: macOS 26+" src="https://img.shields.io/badge/platform-macOS%2026%2B-1d2b40">
+  <img alt="Swift 6" src="https://img.shields.io/badge/swift-6.3-1d2b40">
+  <img alt="Dependencies: none" src="https://img.shields.io/badge/dependencies-none-2a9d5c">
+</p>
 
-```
-QuickShare2/
-├── App/                     ← native SwiftUI app (Swift package)
-│   └── Sources/
-│       ├── QuickShare/         the app: App/, Models/, Services/, Views/, Design/
-│       └── QuickShareProtocol/  the protocol: Wire/, Messages/, Crypto/, Transport/, Discovery/
-├── Resources/
-│   └── NearDrop/            ← the reverse-engineered protocol spec + UNLICENSE
-├── docs/
-│   └── ARCHITECTURE.md      design + engine integration notes
-└── ATTRIBUTION.md           credits for NearDrop and dependencies
-```
+<p align="center">
+  <img src="docs/screenshots/send.jpg" width="46%" alt="QShare Send: nearby devices and a live transfer list">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/receive.jpg" width="46%" alt="QShare Receive: visibility state, setup steps and known senders">
+</p>
 
-## Run it
+---
 
-Real networking (Bonjour/mDNS) needs a proper app bundle so macOS can grant
-local-network access — a bare `swift run` binary can't get it. Use the packager:
+Android phones can share files with each other in two taps. Macs can't join in —
+Quick Share has no Apple client, and AirDrop doesn't speak to Android. QShare
+fills that gap: your Mac shows up in your phone's Quick Share sheet, and your
+phone shows up in QShare's device list.
+
+Quick Share is undocumented, so the protocol here is a clean implementation
+written against a reverse-engineered specification: mDNS discovery, a UKEY2
+key agreement, AES-256-CBC + HMAC-SHA256 secure messages, and chunked payload
+transfer. It depends on nothing outside the OS.
+
+## Features
+
+- **Send** — pick a device, drag files onto it, or use the file picker
+- **Receive** — toggle visibility and your Mac appears on the phone
+- **PIN verification** — a 4-digit code shown on both screens before anything moves
+- **Per-sender auto-accept** — opt in per device to skip the prompt ([caveats](#a-note-on-auto-accept))
+- **QR code** — reach a phone that can't see you over mDNS
+- **Menu-bar app** — keeps running with the window closed
+- **Command-line API** — drive it from scripts or an agent (off by default)
+
+## Requirements
+
+**macOS 26 or later.** The interface uses Apple's Liquid Glass (`glassEffect`),
+which is why `Package.swift` pins `.macOS("26.0")`. Built with Swift 6.3.
+
+Both devices need to be on the same Wi-Fi network.
+
+## Install
 
 ```bash
-cd App
-./Packaging/build-app.sh          # builds build/QShare.app (release)
+git clone https://github.com/kanin-design/QShare.git
+cd QShare/App
+./Packaging/build-app.sh
 open build/QShare.app
 ```
 
-For **UI work without an Android device**, run the mock engine directly:
+The packaging step matters: real networking needs a proper `.app` bundle so
+macOS will grant local-network access. A bare `swift run` binary can't get it.
+
+## Usage
+
+**To receive**, open the Receive tab and turn on visibility. The card shows a
+live indicator once your Mac is genuinely published to the network — not merely
+when you flipped the switch. Then on your phone: share a file, pick your Mac,
+confirm the PIN.
+
+**To send**, pick a device from the Send tab and drag files onto it, or drop
+them straight onto a device row. If the phone doesn't appear, use the QR code —
+scanning it gets you connected without discovery.
+
+Received files land in `~/Downloads` by default; change that in Settings.
+
+### Keyboard
+
+| | |
+|---|---|
+| `⌘1` / `⌘2` | Send / Receive |
+| `⇧⌘V` | Toggle visibility |
+| `⇧⌘O` | Open downloads folder |
+| `⌃⌥←` / `⌃⌥→` | Snap window to screen edge |
+| `⌘⌥I` | Build info |
+
+## Command line
+
+QShare can host a small JSON API on `127.0.0.1:47821` for scripting and
+automation. It is **off by default** — enable it in *Settings → Services*.
+
+> While it's on, anything running under your account can ask QShare to send any
+> file it can read to a nearby device. That's the point of the feature, and the
+> reason it's opt-in.
+
+```bash
+ln -s "$(pwd)/App/Packaging/qshare" /usr/local/bin/qshare
+
+qshare list                                   # devices currently visible
+qshare send ~/photo.jpg --to "Pixel 8 Pro"    # blocks; exit 0 on success
+qshare status --json                          # machine-readable
+```
+
+Requests are authenticated with a token in `~/.config/qshare/token`. Full
+endpoint reference: **[docs/API.md](docs/API.md)**.
+
+## How it works
+
+```
+Views (SwiftUI)  ──observe──▶  AppModel  ──▶  QuickShareService
+                                                     │
+                                          ┌──────────┴──────────┐
+                                     MockService          QuickShareEngine
+                                    (QS_MOCK=1)                 │
+                                                    ┌───────────┴───────────┐
+                                               Discovery              Transport
+                                            mDNS · QR · TXT      framing · sessions
+                                                                        │
+                                                             Crypto ─── Wire
+                                                            UKEY2 P-256  protobuf
+```
+
+`Sources/QuickShareProtocol/` is the protocol; `Sources/QuickShare/` is the app.
+The seam between them is one protocol (`QuickShareService`), which is also what
+makes the mock engine possible.
+
+Some numbers, because they're the interesting part:
+
+| | |
+|---|---|
+| Protocol implementation | ~3,800 lines |
+| App | ~3,400 lines |
+| Tests | ~3,600 lines |
+| Third-party dependencies | **0** |
+
+The wire format is hand-written rather than generated — only ~32 of the
+protocol's messages are ever exchanged, which is a fraction of the schema. Every
+one is asserted byte-identical to a reference encoder, and the parsers that face
+the network are tested against truncation, bit-flips and random input.
+
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the design and the
+protocol details worth knowing.
+
+## Development
 
 ```bash
 cd App
-QS_MOCK=1 swift run QuickShare     # simulated devices, PINs, progress
-# or open in Xcode:  open Package.swift
+swift test                              # 137 tests
+swift test --sanitize=thread            # concurrency
+QS_MOCK=1 swift run QuickShare          # UI work without a phone
 ```
 
-Requires **macOS 26+** — the UI uses Apple's real Liquid Glass (`glassEffect`),
-which is why `Package.swift` sets `.macOS("26.0")`. Built with Swift 6.3 / Xcode 26.
+`QS_MOCK=1` runs a simulated engine that drives every UI state — devices, PINs,
+progress, completion — with no network at all. The screenshots above were taken
+with it.
 
-## CLI / automation (`qshare`)
+## A note on auto-accept
 
-The app can host a localhost JSON API on `127.0.0.1:47821`, guarded by a token in
-`~/.config/qshare/token`. The `qshare` CLI (or any tool/AI) drives it.
+Auto-accept is per-device and off until you turn it on. It's worth knowing
+exactly what it does and doesn't promise.
 
-Enable it first in **Settings > Automation** — it's **off by default**, because
-while it's on anything running under your account can ask QShare to send any file
-it can read to a nearby device.
+Quick Share, as implemented here, exposes **no verifiable device identity**. The
+UKEY2 keys are generated fresh for every handshake, and the certificate frames
+that would carry a persistent identity are not implemented in the specification
+this is built from. The only thing a sender proves is the name it chose to
+advertise.
 
-```bash
-# install the CLI (app must be running for it to work):
-ln -s "$(pwd)/App/Packaging/qshare" /usr/local/bin/qshare
-
-qshare list                                  # visible devices
-qshare list --json                           # machine-readable
-qshare send ~/photo.jpg --to "Noise's phone" # blocks until sent; exit 0 on success
-qshare status
-qshare --help
-```
-
-Full spec + agent recipe: **[docs/API.md](docs/API.md)** (endpoints, JSON shapes, examples, error codes).
+So enabling auto-accept for "Pixel 8 Pro" means: anything on your network
+calling itself *Pixel 8 Pro* will be accepted without a prompt. That's why
+auto-accepted transfers still post a notification rather than landing silently,
+and why it's off by default. For anything you care about, leave it off and
+confirm the PIN.
 
 ## Status
 
-- [x] Research + protocol/prior-art review (see docs/ARCHITECTURE.md)
-- [x] Native SwiftUI shell, minimal design, Send + Receive flows
-- [x] Mock engine driving all UI states (`QS_MOCK=1`)
-- [x] Vendor NearDrop's `NearbyShare/` protocol core → `NearbyShareKit` target
-- [x] Real engine wrapper (`NearbyQuickShareService`) — discovery, advertise,
-      handshake, send, receive, in-app progress (incoming progress hook added)
-- [x] `.app` bundle with Bonjour + local-network Info.plist
-- [x] End-to-end verified against a real Android device (send + receive)
-- [x] Path-traversal hardening on incoming file names
-- [x] App icon (native squircle)
-- [x] Menu-bar presence (stays alive in the background)
-- [x] Every incoming transfer requires explicit approval (no auto-accept — see
-      the note below)
-- [ ] User notifications for incoming requests while the window is closed
-- [ ] Finder share extension (share sheet entry point)
-- [ ] Configurable receive location (currently ~/Downloads, like NearDrop)
-- [ ] Further frame-parser hardening / fuzzing
-- [ ] Verifiable device identity (would re-enable safe auto-accept)
+Working: discovery, advertising, sending, receiving, QR, progress, menu bar,
+CLI, per-device auto-accept, configurable receive folder.
 
-## Note on trusted devices
+Not yet:
 
-QShare deliberately has **no auto-accept**. Quick Share, as implemented here,
-exposes no identity we can verify: the UKEY2 keys are generated fresh per
-handshake, and the paired-key/certificate frames that would carry a persistent
-identity are stubbed out in the vendored engine. The only thing a sender
-supplies is a display name, which is unauthenticated — auto-accepting on it
-would let anything on the network write to your receive folder just by claiming
-the name. The app remembers names you've accepted from and shows that as a hint,
-nothing more.
-```
+- [ ] Finder share extension (share-sheet entry point)
+- [ ] Fuzzing the protobuf decoders
+- [ ] Quarantine attribute on received files
+- [ ] Verifiable device identity (would make auto-accept trustworthy)
+
+## Credits
+
+The Quick Share protocol was reverse-engineered by
+**[grishka/NearDrop](https://github.com/grishka/NearDrop)**, released into the
+public domain. QShare's implementation is its own, written against that
+specification — see **[ATTRIBUTION.md](ATTRIBUTION.md)** for what that means in
+detail. The write-up itself is preserved in `Resources/NearDrop/`.
+
+Not affiliated with or endorsed by Google. "Quick Share" and "Nearby Share" are
+their trademarks.
