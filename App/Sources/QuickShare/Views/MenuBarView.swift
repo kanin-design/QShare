@@ -22,9 +22,11 @@ struct MenuBarView: View {
         }
         Divider()
 
+        // Follows intent so it responds immediately; the icon reflects whether
+        // advertising actually came up.
         Toggle("Receive files (visible)", isOn: Binding(
-            get: { model.isVisible },
-            set: { _ in model.toggleVisibility() }
+            get: { model.wantsVisible },
+            set: { model.setVisible($0) }
         ))
 
         let active = model.transfers.filter { $0.phase == .transferring }.count

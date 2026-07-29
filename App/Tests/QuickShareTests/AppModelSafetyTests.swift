@@ -231,19 +231,45 @@ final class AppModelSafetyTests: XCTestCase {
 
     // MARK: Visibility reflects the engine, never the request
 
-    func testVisibilityOnlyFollowsEngineCallbacks() {
-        XCTAssertFalse(model.isVisible)
+    /// The switch follows intent so it responds instantly; the reported status
+    /// follows the engine so it never claims more than is true.
+    func testIntentIsImmediateButStatusWaitsForTheEngine() {
+        XCTAssertEqual(model.visibilityStatus, .off)
+
         model.toggleVisibility()
+        XCTAssertTrue(model.wantsVisible, "the switch must move immediately")
         XCTAssertTrue(spy.advertising, "the engine was asked to advertise")
-        XCTAssertFalse(model.isVisible,
-                       "the switch must not flip until the engine confirms")
+        XCTAssertFalse(model.isVisible, "nothing is published yet")
+        XCTAssertEqual(model.visibilityStatus, .starting)
 
         model.serviceDidUpdateVisibility(isVisible: true)
         XCTAssertTrue(model.isVisible)
+        XCTAssertEqual(model.visibilityStatus, .on)
+    }
 
-        // Engine reports advertising failed/stopped out from under us.
+    func testTurningOffIsAlsoImmediate() {
+        model.setVisible(true)
+        model.serviceDidUpdateVisibility(isVisible: true)
+        XCTAssertEqual(model.visibilityStatus, .on)
+
+        model.setVisible(false)
+        XCTAssertFalse(model.wantsVisible, "the switch must move immediately")
+        XCTAssertFalse(spy.advertising, "the engine was asked to stop")
+        // Still published until the engine confirms it tore down.
+        XCTAssertEqual(model.visibilityStatus, .stopping)
+
         model.serviceDidUpdateVisibility(isVisible: false)
-        XCTAssertFalse(model.isVisible)
+        XCTAssertEqual(model.visibilityStatus, .off)
+    }
+
+    /// Advertising dropping out on its own must show as pending again, not as on.
+    func testLosingAdvertisingReturnsToStarting() {
+        model.setVisible(true)
+        model.serviceDidUpdateVisibility(isVisible: true)
+        model.serviceDidUpdateVisibility(isVisible: false)
+
+        XCTAssertTrue(model.wantsVisible, "the user still wants to be visible")
+        XCTAssertEqual(model.visibilityStatus, .starting)
     }
 
     // MARK: Control API default

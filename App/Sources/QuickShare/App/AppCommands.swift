@@ -76,7 +76,7 @@ struct AppCommands: Commands {
 
             Divider()
 
-            Button(model.isVisible ? "Stop Being Visible" : "Be Visible to Nearby Devices") {
+            Button(model.wantsVisible ? "Stop Being Visible" : "Be Visible to Nearby Devices") {
                 model.toggleVisibility()
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])

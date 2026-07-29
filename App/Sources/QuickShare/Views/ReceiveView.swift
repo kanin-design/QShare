@@ -51,17 +51,51 @@ struct ReceiveView: View {
     private var visibilityCard: some View {
         Card {
             HStack(spacing: Theme.Space.md) {
+                // The dot reports what's actually true; it only appears once the
+                // network really has us.
+                if model.visibilityStatus == .on {
+                    PulsingDot()
+                        .padding(.trailing, 2)
+                        .transition(.opacity)
+                }
+
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(model.isVisible ? "Visible as" : "Not visible").cardTitle()
-                    Text(model.isVisible ? model.deviceName : "Turn on to receive files")
+                    Text(statusTitle).cardTitle()
+                    Text(statusDetail)
                         .secondaryStyle()
+                        .foregroundStyle(model.visibilityStatus == .failed
+                                         ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.secondary))
                 }
                 Spacer()
+
+                // Bound to intent, so it moves the instant it's clicked rather
+                // than waiting on mDNS.
                 GlassSwitch(isOn: Binding(
-                    get: { model.isVisible },
-                    set: { _ in model.toggleVisibility() }
+                    get: { model.wantsVisible },
+                    set: { model.setVisible($0) }
                 ), label: "Visible to nearby devices")
             }
+            .animation(.easeInOut(duration: 0.2), value: model.visibilityStatus)
+        }
+    }
+
+    private var statusTitle: String {
+        switch model.visibilityStatus {
+        case .on:       return "Visible as"
+        case .starting: return "Starting…"
+        case .stopping: return "Stopping…"
+        case .failed:   return "Couldn't become visible"
+        case .off:      return "Not visible"
+        }
+    }
+
+    private var statusDetail: String {
+        switch model.visibilityStatus {
+        case .on:       return model.deviceName
+        case .starting: return "Announcing on the local network"
+        case .stopping: return "Withdrawing from the network"
+        case .failed:   return "Check that QShare is allowed on your local network."
+        case .off:      return "Turn on to receive files"
         }
     }
 

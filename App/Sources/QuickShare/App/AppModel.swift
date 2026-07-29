@@ -59,7 +59,34 @@ final class AppModel: ObservableObject {
     @Published var deviceName: String = AppModel.defaultDeviceName()
 
     // Receive side
-    @Published var isVisible: Bool = false
+    //
+    // Two separate facts, because conflating them makes the UI either lie or
+    // lag. `wantsVisible` is what the user asked for and flips instantly, so the
+    // switch feels responsive. `isVisible` is what the engine actually achieved
+    // — mDNS published — and drives the status text and indicator.
+    @Published private(set) var wantsVisible: Bool = false
+    @Published private(set) var isVisible: Bool = false
+    /// Set when advertising was requested but never came up.
+    @Published private(set) var visibilityFailed: Bool = false
+
+    /// What to show the user about advertising.
+    enum VisibilityStatus: Equatable {
+        case off
+        case starting
+        case on
+        case stopping
+        case failed
+    }
+
+    var visibilityStatus: VisibilityStatus {
+        if visibilityFailed { return .failed }
+        switch (wantsVisible, isVisible) {
+        case (true, true):   return .on
+        case (true, false):  return .starting
+        case (false, true):  return .stopping
+        case (false, false): return .off
+        }
+    }
     @Published var incomingRequest: IncomingRequest? = nil
 
     // Send side
@@ -132,7 +159,10 @@ final class AppModel: ObservableObject {
         }
         self.service.delegate = self
         self.service.setReceiveDirectory(downloadDirectory)
-        if startVisible { self.service.startAdvertising(deviceName: deviceName) }
+        if startVisible {
+            self.wantsVisible = true
+            self.service.startAdvertising(deviceName: deviceName)
+        }
         // Discover continuously so the menu-bar list is always current.
         self.service.startDiscovery()
         if controlAPIEnabled { startControlServer() }
@@ -411,7 +441,35 @@ final class AppModel: ObservableObject {
     // MARK: Intents — Receive
 
     func toggleVisibility() {
-        isVisible ? service.stopAdvertising() : service.startAdvertising(deviceName: deviceName)
+        setVisible(!wantsVisible)
+    }
+
+    /// Records the intent immediately, then asks the engine.
+    func setVisible(_ on: Bool) {
+        wantsVisible = on
+        visibilityFailed = false
+        if on {
+            service.startAdvertising(deviceName: deviceName)
+            scheduleVisibilityTimeout()
+        } else {
+            service.stopAdvertising()
+        }
+    }
+
+    private var visibilityToken = 0
+
+    /// If advertising never comes up, don't leave a switch sitting on for
+    /// something that isn't happening — turn it back off and say so.
+    private func scheduleVisibilityTimeout() {
+        visibilityToken += 1
+        let token = visibilityToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self, token == self.visibilityToken,
+                  self.wantsVisible, !self.isVisible else { return }
+            self.wantsVisible = false
+            self.visibilityFailed = true
+            self.service.stopAdvertising()
+        }
     }
 
     /// Answers the pending request. `alwaysAccept` enables auto-accept for this
@@ -545,6 +603,15 @@ extension AppModel: QuickShareServiceDelegate {
 
     func serviceDidUpdateVisibility(isVisible: Bool) {
         self.isVisible = isVisible
+        if isVisible {
+            // It came up — cancel the pending failure check.
+            visibilityToken += 1
+            visibilityFailed = false
+            wantsVisible = true
+        } else if wantsVisible {
+            // Dropped out from under us; give it the same grace as a fresh start.
+            scheduleVisibilityTimeout()
+        }
     }
 
     func serviceDidReceiveIncomingRequest(_ request: IncomingRequest) {
