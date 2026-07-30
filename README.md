@@ -61,10 +61,10 @@ macOS will grant local-network access. A bare `swift run` binary can't get it.
 
 ## Usage
 
-**To receive**, open the Receive tab and turn on visibility. The card shows a
-live indicator once your Mac is genuinely published to the network — not merely
-when you flipped the switch. Then on your phone: share a file, pick your Mac,
-confirm the PIN.
+**To receive**, open the Receive tab and turn on visibility. The status line
+reflects whether your Mac is genuinely visible on the network, not just
+whether you flipped the switch. Then on your phone: share a file, pick your
+Mac, confirm the PIN.
 
 **To send**, pick a device from the Send tab and drag files onto it, or drop
 them straight onto a device row. If the phone doesn't appear, use the QR code —
@@ -122,19 +122,20 @@ Views (SwiftUI)  ──observe──▶  AppModel  ──▶  QuickShareService
 The seam between them is one protocol (`QuickShareService`), which is also what
 makes the mock engine possible.
 
-Some numbers, because they're the interesting part:
+Some numbers:
 
 | | |
 |---|---|
-| Protocol implementation | ~3,800 lines |
-| App | ~3,400 lines |
-| Tests | ~3,600 lines |
+| Protocol implementation | ~3,950 lines |
+| App | ~3,500 lines |
+| Tests | ~3,850 lines |
 | Third-party dependencies | **0** |
 
-The wire format is hand-written rather than generated — only ~32 of the
-protocol's messages are ever exchanged, which is a fraction of the schema. Every
-one is asserted byte-identical to a reference encoder, and the parsers that face
-the network are tested against truncation, bit-flips and random input.
+The wire format is hand-written rather than generated — only about 32 of the
+protocol's messages are ever exchanged, a small fraction of the full schema.
+Each one is checked byte-identical against a reference encoder, and the
+parsers that face the network are tested against truncation, bit-flips, and
+random input.
 
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the design and the
 protocol details worth knowing.
