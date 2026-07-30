@@ -15,7 +15,7 @@
 <p align="center">
   <img src="docs/screenshots/send.jpg" width="46%" alt="QShare Send: nearby devices and a live transfer list">
   &nbsp;&nbsp;
-  <img src="docs/screenshots/receive.jpg" width="46%" alt="QShare Receive: visibility state, setup steps and known senders">
+  <img src="docs/screenshots/receive.jpg" width="46%" alt="QShare Receive: visibility state, setup steps and transfer history">
 </p>
 
 ---
@@ -143,7 +143,7 @@ protocol details worth knowing.
 
 ```bash
 cd App
-swift test                              # 150 tests
+swift test                              # 155 tests
 swift test --sanitize=thread            # concurrency
 QS_MOCK=1 swift run QuickShare          # UI work without a phone
 ```
@@ -173,13 +173,6 @@ confirm the PIN.
 
 Working: discovery, advertising, sending, receiving, QR, progress, menu bar,
 CLI, per-device auto-accept, configurable receive folder.
-
-Not yet:
-
-- [ ] Finder share extension (share-sheet entry point)
-- [ ] Fuzzing the protobuf decoders
-- [ ] Quarantine attribute on received files
-- [ ] Verifiable device identity (would make auto-accept trustworthy)
 
 ## Credits
 

@@ -17,16 +17,8 @@ struct DebugInfoSheet: View {
                 Spacer()
             }
 
-            VStack(spacing: 0) {
-                row("Version", BuildInfo.version)
-                divider
-                row("Build", BuildInfo.build, prominent: true)
-                divider
-                row("Commit", BuildInfo.commit)
-                divider
-                row("Built", BuildInfo.builtAt)
-                divider
-                row("Dependencies", "none")
+            DividedRowList(items: infoRows, spacing: 0, dividerInset: Theme.Space.md) { item in
+                row(item.label, item.value, prominent: item.prominent)
             }
             .glassSurface(radius: Theme.Radius.control)
 
@@ -57,8 +49,19 @@ struct DebugInfoSheet: View {
         .focusEffectDisabled()
     }
 
-    private var divider: some View {
-        Divider().overlay(Theme.hairline).padding(.horizontal, Theme.Space.md)
+    private struct InfoRow: Identifiable {
+        let id: String
+        let label: String
+        let value: String
+        var prominent = false
+    }
+
+    private var infoRows: [InfoRow] {
+        [InfoRow(id: "version", label: "Version", value: BuildInfo.version),
+         InfoRow(id: "build", label: "Build", value: BuildInfo.build, prominent: true),
+         InfoRow(id: "commit", label: "Commit", value: BuildInfo.commit),
+         InfoRow(id: "built", label: "Built", value: BuildInfo.builtAt),
+         InfoRow(id: "dependencies", label: "Dependencies", value: "none")]
     }
 
     private func row(_ label: String, _ value: String, prominent: Bool = false) -> some View {

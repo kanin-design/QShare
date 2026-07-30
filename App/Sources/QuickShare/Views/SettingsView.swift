@@ -1,6 +1,14 @@
 import SwiftUI
 import AppKit
 
+/// One row in the Services card: a toggle bound to a model property.
+private struct ServiceToggle: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let isOn: Binding<Bool>
+}
+
 /// Settings, styled to match the app: tinted glass cards, the same type system,
 /// and scrollable so long lists never overflow the fixed-size window.
 struct SettingsView: View {
@@ -12,7 +20,9 @@ struct SettingsView: View {
                 downloadsCard
                 appearanceCard
                 servicesCard
-                knownCard
+                if !model.knownDevices.isEmpty {
+                    knownSendersCard
+                }
             }
             .padding(Theme.Space.lg)
         }
@@ -57,54 +67,46 @@ struct SettingsView: View {
         }
     }
 
-    /// Both background services in one card, sharing one row component so they
-    /// line up exactly.
+    /// Both background services as rows in one standard list card, so they
+    /// line up exactly with every other multi-row card (e.g. Known senders).
     private var servicesCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("Services").cardTitle()
-
-                SettingToggleRow(
-                    title: "Be visible on launch",
-                    subtitle: "Start advertising to nearby devices at startup.",
-                    isOn: Binding(get: { model.startVisible },
-                                  set: { model.setStartVisible($0) }))
-
-                Divider().overlay(Theme.hairline)
-
-                // Named for what it is: a local HTTP server. The qshare command
-                // is one client of it, not the whole story.
-                SettingToggleRow(
-                    title: "Local API server",
-                    subtitle: "Serves 127.0.0.1:\(String(ControlServer.port)) so the qshare command can drive the app. Anything running as you can then send any file it can read.",
-                    isOn: Binding(get: { model.controlAPIEnabled },
-                                  set: { model.setControlAPIEnabled($0) }))
-            }
+        RowListCard(title: "Services", items: [
+            ServiceToggle(
+                id: "visible",
+                title: "Be visible on launch",
+                subtitle: "Start advertising to nearby devices at startup.",
+                isOn: Binding(get: { model.startVisible },
+                              set: { model.setStartVisible($0) })),
+            // Named for what it is: a local HTTP server. The qshare command
+            // is one client of it, not the whole story.
+            ServiceToggle(
+                id: "api",
+                title: "Local API server",
+                subtitle: "Serves 127.0.0.1:\(String(ControlServer.port)) so the qshare command can drive the app. Anything running as you can then send any file it can read.",
+                isOn: Binding(get: { model.controlAPIEnabled },
+                              set: { model.setControlAPIEnabled($0) }))
+        ]) { item in
+            SettingToggleRow(title: item.title, subtitle: item.subtitle, isOn: item.isOn)
         }
     }
 
-    private var knownCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text("Known senders").cardTitle()
-                if model.knownDevices.isEmpty {
-                    Text("Devices appear here after you accept a transfer. Turn one on to receive from it without being asked.")
-                        .secondaryStyle()
-                } else {
-                    Text("Auto-accept files from these devices without a prompt.")
-                        .secondaryStyle()
-                    ForEach(model.knownDevices) { device in
-                        HStack(spacing: Theme.Space.sm) {
-                            DeviceAutoAcceptRow(
-                                name: device.name,
-                                isOn: Binding(
-                                    get: { device.autoAccept },
-                                    set: { model.setAutoAccept($0, for: device.name) }))
-                            Button("Forget") { model.forget(device.name) }
-                                .controlSize(.small)
-                        }
-                    }
-                }
+    /// Settings is the only place this list lives now — the Receive tab's copy
+    /// was removed since the incoming-request sheet already offers the same
+    /// auto-accept toggle at the moment it's actually useful.
+    private var knownSendersCard: some View {
+        RowListCard(
+            title: "Known senders",
+            description: "Turn on auto-accept to skip the prompt for a sender's future transfers.",
+            items: model.knownDevices
+        ) { device in
+            HStack(spacing: Theme.Space.sm) {
+                DeviceAutoAcceptRow(
+                    name: device.name,
+                    isOn: Binding(
+                        get: { device.autoAccept },
+                        set: { model.setAutoAccept($0, for: device.name) }))
+                Button("Forget") { model.forget(device.name) }
+                    .controlSize(.small)
             }
         }
     }

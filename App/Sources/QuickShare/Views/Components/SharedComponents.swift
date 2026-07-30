@@ -18,27 +18,6 @@ struct SectionHeader: View {
     }
 }
 
-/// A soft pulsing status dot for "visible / active" state.
-struct PulsingDot: View {
-    var color: Color = Theme.success
-    @State private var on = false
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 8, height: 8)
-            .overlay(
-                Circle().stroke(color.opacity(0.5), lineWidth: 6)
-                    .scaleEffect(on ? 2.1 : 1)
-                    .opacity(on ? 0 : 0.7)
-            )
-            .onAppear {
-                withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
-                    on = true
-                }
-            }
-    }
-}
-
 /// A pure-SwiftUI on/off switch. Unlike the AppKit-backed `Toggle` hosted inside
 /// a translucent material (which repaints in layers), this composites in a single
 /// pass so it never flickers.
@@ -86,13 +65,17 @@ struct GlassSwitch: View {
 
 /// One switchable setting: title, explanatory subline, switch.
 ///
-/// A single component rather than repeated layout, so every row in Settings is
-/// identical by construction instead of by careful copy-paste.
+/// A single component rather than repeated layout, so every toggle row in the
+/// app — Settings' services, a known sender, the incoming-request sheet's
+/// "always accept" — is identical by construction instead of by copy-paste.
 struct SettingToggleRow: View {
     let title: String
     let subtitle: String
     @Binding var isOn: Bool
     var size: GlassSwitch.Size = .regular
+    /// VoiceOver label, when the visible title alone isn't specific enough
+    /// (e.g. it should name a device the title doesn't mention).
+    var accessibilityLabel: String? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: Theme.Space.md) {
@@ -101,7 +84,7 @@ struct SettingToggleRow: View {
                 Text(subtitle).secondaryStyle()
             }
             Spacer(minLength: Theme.Space.md)
-            GlassSwitch(isOn: $isOn, label: title, size: size)
+            GlassSwitch(isOn: $isOn, label: accessibilityLabel ?? title, size: size)
         }
         .frame(minHeight: size == .regular ? 40 : 32)
     }
@@ -127,6 +110,74 @@ struct DeviceAutoAcceptRow: View {
             GlassSwitch(isOn: $isOn, label: "Auto-accept from \(name)", size: .compact)
         }
         .frame(minHeight: 32)
+    }
+}
+
+/// A vertical list of rows with a hairline divider between each one — the
+/// primitive underneath every "several rows in a group" layout in the app
+/// (Settings' cards, the debug build-info panel). Centralizing it means a
+/// divider is inserted once, consistently, instead of each call site deciding
+/// for itself whether — and how — rows get separated.
+struct DividedRowList<Item: Identifiable, Row: View>: View {
+    let items: [Item]
+    var spacing: CGFloat = Theme.Space.md
+    /// Horizontal inset for the divider only, for callers whose rows already
+    /// pad themselves and need the divider to line up with that inset.
+    var dividerInset: CGFloat = 0
+    let row: (Item) -> Row
+
+    init(items: [Item],
+         spacing: CGFloat = Theme.Space.md,
+         dividerInset: CGFloat = 0,
+         @ViewBuilder row: @escaping (Item) -> Row) {
+        self.items = items
+        self.spacing = spacing
+        self.dividerInset = dividerInset
+        self.row = row
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                row(item)
+                if index < items.count - 1 {
+                    Divider().overlay(Theme.hairline).padding(.horizontal, dividerInset)
+                }
+            }
+        }
+    }
+}
+
+/// A card whose body is a title, optional description, and a `DividedRowList`
+/// — the shape shared by every settings card that lists more than one control
+/// (Services, Known senders). Settings itself scrolls as a whole page, so
+/// this doesn't need its own height cap — a card just grows with its rows.
+struct RowListCard<Item: Identifiable, Row: View>: View {
+    let title: String
+    var description: String? = nil
+    let items: [Item]
+    let row: (Item) -> Row
+
+    init(title: String,
+         description: String? = nil,
+         items: [Item],
+         @ViewBuilder row: @escaping (Item) -> Row) {
+        self.title = title
+        self.description = description
+        self.items = items
+        self.row = row
+    }
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                Text(title).cardTitle()
+                if let description {
+                    Text(description).secondaryStyle()
+                }
+                DividedRowList(items: items, row: row)
+            }
+        }
     }
 }
 
