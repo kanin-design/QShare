@@ -40,17 +40,12 @@ struct IncomingRequestSheet: View {
             }
 
             // Compact switch: this is a per-device choice, not a service.
-            HStack(spacing: Theme.Space.sm) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Always accept from this device").font(.callout)
-                    Text("Skip this prompt next time.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: Theme.Space.sm)
-                GlassSwitch(isOn: $alwaysAccept,
-                            label: "Always accept from \(request.device.name)",
-                            size: .compact)
-            }
+            SettingToggleRow(
+                title: "Always accept from this device",
+                subtitle: "Skip this prompt next time.",
+                isOn: $alwaysAccept,
+                size: .compact,
+                accessibilityLabel: "Always accept from \(request.device.name)")
             .padding(.horizontal, 2)
 
             HStack(spacing: Theme.Space.md) {

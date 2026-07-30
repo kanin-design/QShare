@@ -17,48 +17,12 @@ struct ReceiveView: View {
             if model.isVisible {
                 instructions
             }
-
-            if !model.knownDevices.isEmpty {
-                knownDevices
-            }
-        }
-    }
-
-    private var knownDevices: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text("Known senders").cardTitle()
-                Text("Turn one on to receive from it without a prompt.")
-                    .secondaryStyle()
-                ScrollView {
-                    VStack(spacing: Theme.Space.xs) {
-                        ForEach(model.knownDevices) { device in
-                            DeviceAutoAcceptRow(
-                                name: device.name,
-                                isOn: Binding(
-                                    get: { device.autoAccept },
-                                    set: { model.setAutoAccept($0, for: device.name) }))
-                        }
-                    }
-                }
-                .scrollIndicators(.hidden)
-                .frame(maxHeight: 120)
-                .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 
     private var visibilityCard: some View {
         Card {
             HStack(spacing: Theme.Space.md) {
-                // The dot reports what's actually true; it only appears once the
-                // network really has us.
-                if model.visibilityStatus == .on {
-                    PulsingDot()
-                        .padding(.trailing, 2)
-                        .transition(.opacity)
-                }
-
                 VStack(alignment: .leading, spacing: 3) {
                     Text(statusTitle).cardTitle()
                     Text(statusDetail)

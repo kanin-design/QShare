@@ -60,12 +60,11 @@ struct TransfersList: View {
                               content: geo.contentSize.height,
                               container: geo.containerSize.height)
             } action: { _, new in metrics = new }
-            // `fixedSize` makes the scroll view adopt its content's height, so a
-            // short list wraps instead of filling the window; `maxHeight` then
-            // caps it and scrolling takes over. Order matters — the cap has to
-            // be applied to the already-wrapped height.
+            // Always fills up to `maxHeight` — a short list still occupies the
+            // whole panel down to the same margin as the top, instead of
+            // leaving bare window background below it — and only becomes
+            // internally scrollable once content actually exceeds that.
             .frame(maxHeight: maxHeight)
-            .fixedSize(horizontal: false, vertical: true)
             .glassSurface(radius: Theme.Radius.card)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
             .overlay(alignment: .trailing) {

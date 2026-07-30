@@ -50,7 +50,10 @@ final class MockQuickShareService: QuickShareService {
             delegate?.serviceDidFinishTransfer(id: id, error: nil)   // declined = clean close
             return
         }
-        delegate?.serviceDidAcceptTransfer(id: id)
+        // `serviceDidAcceptTransfer` is a send-side event (the real engine only
+        // fires it when a remote device accepts *our* send) — the caller already
+        // inserted this transfer's row before calling us, so firing it here too
+        // would hit AppModel's "unknown id" fallback and insert a bogus duplicate.
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         let resolved = [TransferFile(name: "sunset.jpg", url: downloads?.appendingPathComponent("sunset.jpg"))]
         simulateProgress(id: id, resolve: resolved)
