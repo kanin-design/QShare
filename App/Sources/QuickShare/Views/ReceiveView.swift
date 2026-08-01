@@ -8,7 +8,7 @@ struct ReceiveView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.md) {
+        VStack(alignment: .leading, spacing: Theme.Space.lg) {
             // Mirrors Send's "NEARBY DEVICES" slot so content lands at the same Y.
             SectionHeader(title: "Visibility")
 
@@ -22,23 +22,17 @@ struct ReceiveView: View {
 
     private var visibilityCard: some View {
         Card {
-            HStack(spacing: Theme.Space.md) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(statusTitle).cardTitle()
-                    Text(statusDetail)
-                        .secondaryStyle()
-                        .foregroundStyle(model.visibilityStatus == .failed
-                                         ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.secondary))
-                }
-                Spacer()
-
-                // Bound to intent, so it moves the instant it's clicked rather
-                // than waiting on mDNS.
-                GlassSwitch(isOn: Binding(
-                    get: { model.wantsVisible },
-                    set: { model.setVisible($0) }
-                ), label: "Visible to nearby devices")
-            }
+            // Bound to intent, so it moves the instant it's clicked rather than
+            // waiting on mDNS.
+            ToggleElement(
+                title: statusTitle,
+                subtitle: statusDetail,
+                subtitleColor: model.visibilityStatus == .failed
+                    ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.secondary),
+                isOn: Binding(get: { model.wantsVisible }, set: { model.setVisible($0) }),
+                switchStyle: .glass,
+                glassOnColor: Theme.accent,
+                accessibilityLabel: "Visible to nearby devices")
             .animation(.easeInOut(duration: 0.2), value: model.visibilityStatus)
         }
     }
@@ -82,9 +76,9 @@ struct ReceiveView: View {
     private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: Theme.Space.md) {
             Text("\(n)")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .frame(width: 18, height: 18)
+                .frame(width: 16, height: 16)
                 .background(Color.primary.opacity(0.08), in: Circle())
             Text(text).primaryStyle()
             Spacer(minLength: 0)

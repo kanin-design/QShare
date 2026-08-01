@@ -11,7 +11,7 @@ struct SectionHeader: View {
             Spacer()
             trailing
         }
-        .frame(minHeight: 22)   // fixed height so tabs share identical top geometry
+        .frame(minHeight: 19)   // fixed height so tabs share identical top geometry
         // Align the header with the card's *content*, not its outer edge — the
         // card extends further left (macOS grouped-list convention).
         .padding(.horizontal, Theme.Space.lg)
@@ -36,8 +36,8 @@ struct GlassSwitch: View {
         case regular, compact
         var dimensions: CGSize {
             switch self {
-            case .regular: return CGSize(width: 40, height: 24)
-            case .compact: return CGSize(width: 32, height: 19)
+            case .regular: return CGSize(width: 34, height: 20)
+            case .compact: return CGSize(width: 26, height: 15)
             }
         }
         var knobInset: CGFloat { self == .regular ? 2 : 1.5 }
@@ -63,121 +63,179 @@ struct GlassSwitch: View {
     }
 }
 
-/// One switchable setting: title, explanatory subline, switch.
-///
-/// A single component rather than repeated layout, so every toggle row in the
-/// app — Settings' services, a known sender, the incoming-request sheet's
-/// "always accept" — is identical by construction instead of by copy-paste.
-struct SettingToggleRow: View {
+/// Arranges rows inside a `Card` — the only place a divider or a gap gets
+/// drawn between rows, so no call site has to decide that for itself.
+/// `.divider` is a settings-table shape (Services, Known senders): a hairline
+/// inset under the text, the way System Settings' own toggle lists draw it —
+/// not a bold rule the way our first attempt at this drew it. `.gap` is the
+/// hover-highlight shape for picker-style lists (Nearby devices, Transfers),
+/// where a permanent line would fight the hover background.
+struct ElementList<Item: Identifiable, Row: View>: View {
+    enum Separator { case divider, gap }
+
+    let items: [Item]
+    var separator: Separator = .gap
+    @ViewBuilder let row: (Item) -> Row
+
+    var body: some View {
+        switch separator {
+        case .divider:
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    row(item)
+                    if index < items.count - 1 {
+                        Divider()
+                            .overlay(Theme.hairline.opacity(0.6))
+                            .padding(.leading, 20)
+                    }
+                }
+            }
+        case .gap:
+            VStack(spacing: 2) {
+                ForEach(items) { row($0) }
+            }
+        }
+    }
+}
+
+/// A row whose state IS a switch: optional icon, title, optional subtitle,
+/// and an optional accessory (e.g. a "Forget" button) that sits just before
+/// the switch. Every "this is on or off" row in the app is one of these —
+/// Services, Known senders, the Visibility card, the incoming-request
+/// "always accept" toggle — styled through these parameters rather than four
+/// separate hand-written layouts. The switch is always the last thing in the
+/// row, flush with the card's trailing edge, so every switch in the app —
+/// regardless of what row it's in — lines up at the same size and position.
+struct ToggleElement<Accessory: View>: View {
+    /// The switch itself: `.system` (the real macOS switch) everywhere except
+    /// the one row — visibility on the Receive tab — that's the single most
+    /// glanced-at control in the app and earns the custom glass treatment.
+    enum SwitchStyle { case system, glass }
+
+    var icon: String? = nil
+    var iconColor: Color = Theme.success
     let title: String
-    let subtitle: String
+    var subtitle: String? = nil
+    var subtitleColor: AnyShapeStyle = AnyShapeStyle(.secondary)
     @Binding var isOn: Bool
     var size: GlassSwitch.Size = .regular
+    var switchStyle: SwitchStyle = .system
+    /// Glass-only: what on/off mean beyond "enabled" — e.g. red for "not
+    /// trusted" rather than the default green/danger pairing.
+    var glassOnColor: Color = Theme.success
+    var glassOffColor: Color = Theme.danger
     /// VoiceOver label, when the visible title alone isn't specific enough
     /// (e.g. it should name a device the title doesn't mention).
     var accessibilityLabel: String? = nil
-
-    var body: some View {
-        HStack(alignment: .center, spacing: Theme.Space.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).primaryStyle()
-                Text(subtitle).secondaryStyle()
-            }
-            Spacer(minLength: Theme.Space.md)
-            GlassSwitch(isOn: $isOn, label: accessibilityLabel ?? title, size: size)
-        }
-        .frame(minHeight: size == .regular ? 40 : 32)
-    }
-}
-
-/// One known sender with its auto-accept switch. Uses the compact switch: it
-/// governs a single device, not a service.
-struct DeviceAutoAcceptRow: View {
-    let name: String
-    @Binding var isOn: Bool
+    @ViewBuilder var accessory: () -> Accessory
 
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
-            Image(systemName: isOn ? "checkmark.shield.fill" : "iphone.gen3")
-                .font(.system(size: 12))
-                .foregroundStyle(isOn ? Theme.success : .secondary)
-                .frame(width: 16)
-            Text(name).primaryStyle().lineLimit(1)
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 11))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 14)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).primaryStyle().lineLimit(1)
+                if let subtitle {
+                    Text(subtitle).secondaryStyle().foregroundStyle(subtitleColor)
+                }
+            }
             Spacer(minLength: Theme.Space.sm)
-            Text(isOn ? "Auto" : "Ask")
-                .secondaryStyle()
-                .monospacedDigit()
-            GlassSwitch(isOn: $isOn, label: "Auto-accept from \(name)", size: .compact)
-        }
-        .frame(minHeight: 32)
-    }
-}
-
-/// A vertical list of rows with a hairline divider between each one — the
-/// primitive underneath every "several rows in a group" layout in the app
-/// (Settings' cards, the debug build-info panel). Centralizing it means a
-/// divider is inserted once, consistently, instead of each call site deciding
-/// for itself whether — and how — rows get separated.
-struct DividedRowList<Item: Identifiable, Row: View>: View {
-    let items: [Item]
-    var spacing: CGFloat = Theme.Space.md
-    /// Horizontal inset for the divider only, for callers whose rows already
-    /// pad themselves and need the divider to line up with that inset.
-    var dividerInset: CGFloat = 0
-    let row: (Item) -> Row
-
-    init(items: [Item],
-         spacing: CGFloat = Theme.Space.md,
-         dividerInset: CGFloat = 0,
-         @ViewBuilder row: @escaping (Item) -> Row) {
-        self.items = items
-        self.spacing = spacing
-        self.dividerInset = dividerInset
-        self.row = row
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: spacing) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                row(item)
-                if index < items.count - 1 {
-                    Divider().overlay(Theme.hairline).padding(.horizontal, dividerInset)
-                }
+            accessory()
+            switch switchStyle {
+            case .system:
+                // The system switch has a fixed physical size that assumes
+                // System Settings' larger type; next to our much smaller type
+                // scale it reads oversized, so every row pulls it down to the
+                // same small size rather than varying it by row.
+                Toggle(accessibilityLabel ?? title, isOn: $isOn)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .controlSize(.mini)
+            case .glass:
+                GlassSwitch(isOn: $isOn, label: accessibilityLabel ?? title, size: size,
+                            onColor: glassOnColor, offColor: glassOffColor)
             }
         }
+        .frame(minHeight: size == .regular ? 34 : 26)
     }
 }
 
-/// A card whose body is a title, optional description, and a `DividedRowList`
-/// — the shape shared by every settings card that lists more than one control
-/// (Services, Known senders). Settings itself scrolls as a whole page, so
-/// this doesn't need its own height cap — a card just grows with its rows.
-struct RowListCard<Item: Identifiable, Row: View>: View {
+extension ToggleElement where Accessory == EmptyView {
+    init(icon: String? = nil,
+         iconColor: Color = Theme.success,
+         title: String,
+         subtitle: String? = nil,
+         subtitleColor: AnyShapeStyle = AnyShapeStyle(.secondary),
+         isOn: Binding<Bool>,
+         size: GlassSwitch.Size = .regular,
+         switchStyle: SwitchStyle = .system,
+         glassOnColor: Color = Theme.success,
+         glassOffColor: Color = Theme.danger,
+         accessibilityLabel: String? = nil) {
+        self.init(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle,
+                  subtitleColor: subtitleColor, isOn: isOn,
+                  size: size, switchStyle: switchStyle,
+                  glassOnColor: glassOnColor, glassOffColor: glassOffColor,
+                  accessibilityLabel: accessibilityLabel, accessory: { EmptyView() })
+    }
+}
+
+/// A row you tap to do something: icon, title, optional subtitle, trailing
+/// view (a chevron unless overridden), hover highlight. The shape shared by
+/// every "pick one of these" row — a discovered device, the QR-code
+/// fallback — built once so their insets can't drift the way hand-copied
+/// markup did.
+struct ActionElement: View {
+    let icon: String
+    var iconColor: Color = Theme.accent
     let title: String
-    var description: String? = nil
-    let items: [Item]
-    let row: (Item) -> Row
+    var subtitle: String? = nil
+    var subtitleColor: AnyShapeStyle = AnyShapeStyle(.secondary)
+    /// Overrides the resting/hover background — e.g. a drag-and-drop target
+    /// highlight. Leave nil for the default hover-only behavior.
+    var tint: Color? = nil
+    let action: () -> Void
+    /// Replaces the default chevron when set.
+    var trailing: (() -> AnyView)? = nil
 
-    init(title: String,
-         description: String? = nil,
-         items: [Item],
-         @ViewBuilder row: @escaping (Item) -> Row) {
-        self.title = title
-        self.description = description
-        self.items = items
-        self.row = row
-    }
+    @State private var hovering = false
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text(title).cardTitle()
-                if let description {
-                    Text(description).secondaryStyle()
+        Button(action: action) {
+            HStack(spacing: Theme.Space.md) {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).primaryStyle()
+                    if let subtitle {
+                        Text(subtitle).secondaryStyle().foregroundStyle(subtitleColor)
+                    }
                 }
-                DividedRowList(items: items, row: row)
+                Spacer()
+                if let trailing {
+                    trailing()
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
             }
+            .padding(.horizontal, Theme.Space.md)
+            .padding(.vertical, Theme.Space.sm + 1)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                .fill(tint ?? (hovering ? Color.primary.opacity(0.06) : Color.clear))
+        )
+        .onHover { hovering = $0 }
     }
 }
 
@@ -187,8 +245,8 @@ struct PinBadge: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(pin)
-                .font(.system(.largeTitle, design: .monospaced).weight(.semibold))
-                .tracking(8)
+                .font(.system(.title, design: .monospaced).weight(.semibold))
+                .tracking(6)
                 .monospacedDigit()
                 .contentTransition(.numericText())
             Text("Make sure this matches the code on the other device")

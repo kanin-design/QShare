@@ -6,16 +6,28 @@ private struct ServiceToggle: Identifiable {
     let id: String
     let title: String
     let subtitle: String
+    /// Longer, hover-only detail — for a caveat that matters but would make
+    /// the always-visible subtitle wrap messily.
+    var help: String? = nil
     let isOn: Binding<Bool>
 }
 
 /// Settings, styled to match the app: tinted glass cards, the same type system,
-/// and scrollable so long lists never overflow the fixed-size window.
+/// and sized to its content — the window grows and shrinks as cards like
+/// Known Senders appear or their lists change, rather than a fixed height.
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        ScrollView {
+        // No explicit height anywhere in this chain: a plain VStack reports
+        // its own real intrinsic size, which is what lets
+        // `.windowResizability(.contentSize)` track it and resize the window
+        // as cards like Known Senders appear or their list changes — driving
+        // that from a self-measured `.frame(height:)` instead caused a
+        // feedback loop (the frame constrained the very thing measuring it)
+        // that collapsed the window to nothing.
+        VStack(spacing: 0) {
+            header
             VStack(spacing: Theme.Space.lg) {
                 downloadsCard
                 appearanceCard
@@ -26,13 +38,22 @@ struct SettingsView: View {
             }
             .padding(Theme.Space.lg)
         }
-        .scrollIndicators(.hidden)
-        .frame(width: 460, height: 520)
+        .frame(width: 400)
+        .ignoresSafeArea(.container, edges: .top)   // let the title sit on the traffic-light row
         .background(Theme.windowTint)
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
         .preferredColorScheme(model.appearance.colorScheme)
         .focusEffectDisabled()
+    }
+
+    // Mirrors RootView's slim title: centered, vertically aligned with the
+    // traffic-light buttons (28pt band), no divider.
+    private var header: some View {
+        Text("Settings")
+            .font(.system(size: 12, weight: .light))
+            .foregroundStyle(.primary.opacity(0.9))
+            .frame(maxWidth: .infinity, minHeight: 28)
     }
 
     private var downloadsCard: some View {
@@ -70,43 +91,56 @@ struct SettingsView: View {
     /// Both background services as rows in one standard list card, so they
     /// line up exactly with every other multi-row card (e.g. Known senders).
     private var servicesCard: some View {
-        RowListCard(title: "Services", items: [
-            ServiceToggle(
-                id: "visible",
-                title: "Be visible on launch",
-                subtitle: "Start advertising to nearby devices at startup.",
-                isOn: Binding(get: { model.startVisible },
-                              set: { model.setStartVisible($0) })),
-            // Named for what it is: a local HTTP server. The qshare command
-            // is one client of it, not the whole story.
-            ServiceToggle(
-                id: "api",
-                title: "Local API server",
-                subtitle: "Serves 127.0.0.1:\(String(ControlServer.port)) so the qshare command can drive the app. Anything running as you can then send any file it can read.",
-                isOn: Binding(get: { model.controlAPIEnabled },
-                              set: { model.setControlAPIEnabled($0) }))
-        ]) { item in
-            SettingToggleRow(title: item.title, subtitle: item.subtitle, isOn: item.isOn)
+        Card {
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                Text("Services").cardTitle()
+                ElementList(items: [
+                    ServiceToggle(
+                        id: "visible",
+                        title: "Visible on launch",
+                        subtitle: "Start advertising to nearby devices at startup.",
+                        isOn: Binding(get: { model.startVisible },
+                                      set: { model.setStartVisible($0) })),
+                    // Named for what it is: a local HTTP server. The qshare command
+                    // is one client of it, not the whole story.
+                    ServiceToggle(
+                        id: "api",
+                        title: "Local API server",
+                        subtitle: "Lets the qshare command drive the app.",
+                        help: "Serves 127.0.0.1:\(String(ControlServer.port)). Anything running as you can then send any file it can read.",
+                        isOn: Binding(get: { model.controlAPIEnabled },
+                                      set: { model.setControlAPIEnabled($0) }))
+                ], separator: .divider) { item in
+                    ToggleElement(title: item.title, subtitle: item.subtitle, isOn: item.isOn)
+                        .help(item.help ?? "")
+                }
+            }
         }
     }
 
-    /// Settings is the only place this list lives now — the Receive tab's copy
-    /// was removed since the incoming-request sheet already offers the same
-    /// auto-accept toggle at the moment it's actually useful.
+    /// The only place per-device auto-accept is managed. The incoming-request
+    /// sheet has its own toggle for the moment a first-time sender needs it;
+    /// this list is for reviewing and revoking trust afterward.
     private var knownSendersCard: some View {
-        RowListCard(
-            title: "Known senders",
-            description: "Turn on auto-accept to skip the prompt for a sender's future transfers.",
-            items: model.knownDevices
-        ) { device in
-            HStack(spacing: Theme.Space.sm) {
-                DeviceAutoAcceptRow(
-                    name: device.name,
-                    isOn: Binding(
-                        get: { device.autoAccept },
-                        set: { model.setAutoAccept($0, for: device.name) }))
-                Button("Forget") { model.forget(device.name) }
-                    .controlSize(.small)
+        Card {
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                Text("Known senders").cardTitle()
+                Text("Auto-accept skips the prompt for future transfers.")
+                    .secondaryStyle()
+                ElementList(items: model.knownDevices, separator: .divider) { device in
+                    ToggleElement(
+                        icon: device.autoAccept ? "checkmark.shield.fill" : "iphone.gen3",
+                        iconColor: device.autoAccept ? Theme.success : .secondary,
+                        title: device.name,
+                        isOn: Binding(get: { device.autoAccept },
+                                      set: { model.setAutoAccept($0, for: device.name) }),
+                        size: .compact,
+                        accessibilityLabel: "Auto-accept from \(device.name)"
+                    ) {
+                        Button("Forget") { model.forget(device.name) }
+                            .controlSize(.small)
+                    }
+                }
             }
         }
     }

@@ -45,7 +45,6 @@ public actor InboundSession {
     }
 
     /// Runs the session. The stream finishes when the transfer ends.
-    /// Runs the session. The stream finishes when the transfer ends.
     ///
     /// Callable once. A second call would replace the event continuation and
     /// start a second handshake on a socket already in use, so it hands back an
@@ -226,9 +225,9 @@ public actor InboundSession {
         }
 
         // A shared link or snippet of text. It arrives as a bytes payload rather
-        // than a file payload, so it needs its own path — previously this
-        // accepted the offer and then dropped the payload on the floor, which
-        // told the sender it had worked while producing nothing.
+        // than a file payload, so it needs its own path — falling through to
+        // the file-handling code below would accept the offer and then drop
+        // the payload, telling the sender it worked while producing nothing.
         if introduction.fileMetadata.isEmpty, let text = introduction.textMetadata.first {
             guard let payloadID = text.payloadID else {
                 throw QuickShareError.missingField("textMetadata.payloadID")

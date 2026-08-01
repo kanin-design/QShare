@@ -3,6 +3,7 @@ import SwiftUI
 /// Accept/decline prompt for an incoming transfer. Presented as a sheet from the
 /// app root, so it appears over either tab — an incoming request is never hidden.
 struct IncomingRequestSheet: View {
+    @EnvironmentObject private var model: AppModel
     let request: IncomingRequest
     /// True when we've accepted from a device using this name before.
     let isKnown: Bool
@@ -15,19 +16,19 @@ struct IncomingRequestSheet: View {
     var body: some View {
         VStack(spacing: Theme.Space.lg) {
             ZStack {
-                Circle().fill(Theme.accent.opacity(0.12)).frame(width: 60, height: 60)
+                Circle().fill(Theme.accent.opacity(0.12)).frame(width: 52, height: 52)
                 Image(systemName: request.device.type.symbol)
-                    .font(.system(size: 26))
+                    .font(.system(size: 22))
                     .foregroundStyle(Theme.accent)
             }
             .padding(.top, Theme.Space.sm)
 
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Text("\(request.device.name) wants to send")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .multilineTextAlignment(.center)
                 Text("\(request.summary) · \(request.displaySize)")
-                    .font(.subheadline)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
 
@@ -40,7 +41,7 @@ struct IncomingRequestSheet: View {
             }
 
             // Compact switch: this is a per-device choice, not a service.
-            SettingToggleRow(
+            ToggleElement(
                 title: "Always accept from this device",
                 subtitle: "Skip this prompt next time.",
                 isOn: $alwaysAccept,
@@ -64,7 +65,11 @@ struct IncomingRequestSheet: View {
             }
         }
         .padding(Theme.Space.xl)
-        .frame(width: 320)
+        .frame(width: 290)
+        .background(Theme.windowTint)
+        .containerBackground(.regularMaterial, for: .window)
+        .tint(Theme.accent)
+        .preferredColorScheme(model.appearance.colorScheme)
         .focusEffectDisabled()
     }
 }

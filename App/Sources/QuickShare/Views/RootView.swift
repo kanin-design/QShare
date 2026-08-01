@@ -60,13 +60,13 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
-        .background(Theme.windowTint)               // intentional blue wash over the material
+        .background(Theme.windowTint)               // faint neutral wash over the material
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
         .preferredColorScheme(model.appearance.colorScheme)
         .focusEffectDisabled()          // mouse-only app — no keyboard focus rings
         .animation(.easeInOut(duration: 0.2), value: model.connection)
-        // ⌘⇧D — which build am I running? Driven by the menu command so the
+        // ⌘⌥I — which build am I running? Driven by the menu command so the
         // shortcut works wherever focus happens to be.
         .sheet(isPresented: $model.showingBuildInfo) {
             DebugInfoSheet { model.showingBuildInfo = false }
@@ -99,7 +99,7 @@ struct RootView: View {
     // the traffic-light buttons (28pt band), no divider.
     private var header: some View {
         Text("QShare")
-            .font(.system(size: 13, weight: .light))
+            .font(.system(size: 12, weight: .light))
             .foregroundStyle(.primary.opacity(0.9))
             .frame(maxWidth: .infinity, minHeight: 28)
     }
@@ -147,10 +147,10 @@ struct ModeToggle: View {
         let isHover = hovered == mode && !isOn
 
         return Text(mode.rawValue)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(isOn ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 9)
+            .padding(.vertical, 7)
             // Hover shows a faint fill (like the list rows), not a color change.
             .background {
                 if isHover {

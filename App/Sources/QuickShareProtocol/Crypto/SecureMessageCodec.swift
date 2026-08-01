@@ -90,8 +90,8 @@ public struct SecureMessageCodec: Sendable {
     /// Padding is applied and validated here rather than by `CCCrypt`'s
     /// `kCCOptionPKCS7Padding`: that option accepts inputs which are not a
     /// multiple of the block size and quietly returns garbage instead of an
-    /// error, which is how malformed ciphertext used to reach the protobuf
-    /// parser as noise. Doing it explicitly lets us reject it up front.
+    /// error, letting malformed ciphertext reach the protobuf parser as noise
+    /// instead of failing here. Doing it explicitly rejects it up front.
     private static func crypt(operation: CCOperation, key: SymmetricKey,
                               iv: Data, input: Data) throws -> Data {
         let blockSize = kCCBlockSizeAES128

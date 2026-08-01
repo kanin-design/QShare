@@ -138,9 +138,9 @@ actor SecureChannel {
         guard let payloadID = header.id else {
             throw QuickShareError.missingField("payloadHeader.id")
         }
-        // A declared size is attacker-controlled: bound it on both sides. A
-        // negative value once reached NSMutableData(capacity:) and killed the
-        // process outright.
+        // A declared size is attacker-controlled: bound it on both sides. An
+        // unchecked negative value reaches NSMutableData(capacity:), which
+        // crashes the process outright.
         let declared = header.totalSize ?? 0
         guard declared >= 0, declared <= Int64(Self.maxPayloadBytes) else {
             payloadBuffers.removeValue(forKey: payloadID)

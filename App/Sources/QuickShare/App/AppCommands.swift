@@ -7,28 +7,28 @@ import AppKit
 /// how many children one block may have.
 private struct InertDefaultsRemoved: Commands {
     var body: some Commands {
-        // Nothing in this app accepts text, so the entire Edit menu was dead.
+        // No text entry anywhere in this app, so the entire Edit menu is inert.
         CommandGroup(replacing: .undoRedo) {}
         CommandGroup(replacing: .pasteboard) {}
         CommandGroup(replacing: .textEditing) {}
-        // Note: no `.textFormatting` replacement. Replacing it with an empty
-        // group *creates* an empty Format menu that wasn't there before —
-        // AppDelegate prunes what the system insists on instead.
+        // No `.textFormatting` replacement: an empty group would *create* a
+        // Format menu rather than remove one. AppDelegate prunes it instead,
+        // since that's the only thing that actually works.
         CommandGroup(replacing: .toolbar) {}
         CommandGroup(replacing: .help) {}
-        // No documents, so New and Open would do nothing.
+        // No documents, so New and Open have nothing to act on.
         CommandGroup(replacing: .newItem) {}
     }
 }
 
 /// The menu bar.
 ///
-/// SwiftUI's defaults assume a document app with text editing, a toolbar and a
-/// sidebar. This app has none of those, so most of Edit and View were inert
-/// commands. They're removed rather than left to look broken, and what remains
-/// is only what this app can actually do.
+/// SwiftUI's defaults assume a document app with text editing, a toolbar, and
+/// a sidebar. This app has none of those, so the Edit and View menus are
+/// pared down to only the commands that actually do something here.
 struct AppCommands: Commands {
     @ObservedObject var model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
 
@@ -39,6 +39,13 @@ struct AppCommands: Commands {
         CommandGroup(after: .appInfo) {
             Button("Build Info…") { model.showingBuildInfo = true }
                 .keyboardShortcut("i", modifiers: [.command, .option])
+        }
+
+        // Settings is a plain Window (see QuickShareApp), not the Settings
+        // scene, so we supply its usual ⌘, menu item ourselves.
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { openWindow(id: "settings-panel") }
+                .keyboardShortcut(",", modifiers: .command)
         }
 
         // MARK: File

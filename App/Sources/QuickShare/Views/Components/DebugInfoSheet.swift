@@ -1,26 +1,42 @@
 import SwiftUI
 import AppKit
 
-/// ⌘⇧D — exactly which build is running.
+/// ⌘⌥I — exactly which build is running.
 ///
-/// Exists so "am I testing the latest?" is answerable in one keystroke instead
-/// of by inspecting timestamps. The commit is the authoritative part; the build
-/// number is the part that's easy to read out loud.
+/// A glance-and-dismiss diagnostic, not a form: the build number and commit
+/// are the only facts that actually answer "is this the latest build?", so
+/// they're the whole hero — big, monospaced, tap to copy. Everything else is
+/// a quiet caption underneath, not a card of equally-weighted rows.
 struct DebugInfoSheet: View {
+    @EnvironmentObject private var model: AppModel
     let onClose: () -> Void
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.lg) {
-            HStack(spacing: Theme.Space.sm) {
-                Image(systemName: "hammer.fill").foregroundStyle(Theme.accent)
-                Text("Build info").font(.title3.weight(.semibold))
-                Spacer()
-            }
+    @State private var justCopied = false
 
-            DividedRowList(items: infoRows, spacing: 0, dividerInset: Theme.Space.md) { item in
-                row(item.label, item.value, prominent: item.prominent)
+    var body: some View {
+        VStack(spacing: Theme.Space.lg) {
+            Text("Build").secondaryStyle()
+
+            VStack(spacing: 3) {
+                Text(BuildInfo.build)
+                    .font(.system(.title2, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+                    .contentTransition(.numericText())
+
+                Text(justCopied ? "Copied to clipboard" : BuildInfo.commit)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(justCopied ? AnyShapeStyle(Theme.success) : AnyShapeStyle(.secondary))
             }
-            .glassSurface(radius: Theme.Radius.control)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: copy)
+            .help("Click to copy build info")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("Build \(BuildInfo.build), commit \(BuildInfo.commit)")
+            .accessibilityHint("Copies build info to the clipboard")
+            .animation(.easeInOut(duration: 0.15), value: justCopied)
+
+            Text("\(BuildInfo.version) · built \(BuildInfo.builtAt)")
+                .secondaryStyle()
 
             if !BuildInfo.isPackaged {
                 Label("Running unpackaged (swift run) — no build stamp.",
@@ -29,55 +45,26 @@ struct DebugInfoSheet: View {
                     .foregroundStyle(Theme.danger)
             }
 
-            HStack(spacing: Theme.Space.md) {
-                Button("Copy") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(BuildInfo.summary, forType: .string)
-                }
-                .controlSize(.large)
-
-                Button(action: onClose) {
-                    Text("Done").frame(maxWidth: .infinity)
-                }
-                .controlSize(.large)
-                .buttonStyle(.borderedProminent)
+            Button("Done", action: onClose)
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.accent)
                 .keyboardShortcut(.cancelAction)
-            }
         }
+        .multilineTextAlignment(.center)
         .padding(Theme.Space.xl)
-        .frame(width: 340)
+        .frame(width: 260)
+        .background(Theme.windowTint)
+        .containerBackground(.regularMaterial, for: .window)
+        .tint(Theme.accent)
+        .preferredColorScheme(model.appearance.colorScheme)
         .focusEffectDisabled()
     }
 
-    private struct InfoRow: Identifiable {
-        let id: String
-        let label: String
-        let value: String
-        var prominent = false
-    }
-
-    private var infoRows: [InfoRow] {
-        [InfoRow(id: "version", label: "Version", value: BuildInfo.version),
-         InfoRow(id: "build", label: "Build", value: BuildInfo.build, prominent: true),
-         InfoRow(id: "commit", label: "Commit", value: BuildInfo.commit),
-         InfoRow(id: "built", label: "Built", value: BuildInfo.builtAt),
-         InfoRow(id: "dependencies", label: "Dependencies", value: "none")]
-    }
-
-    private func row(_ label: String, _ value: String, prominent: Bool = false) -> some View {
-        HStack(spacing: Theme.Space.md) {
-            Text(label).secondaryStyle()
-            Spacer(minLength: Theme.Space.md)
-            Text(value)
-                .font(.system(size: prominent ? 14 : 12,
-                              weight: prominent ? .semibold : .regular,
-                              design: .monospaced))
-                .foregroundStyle(prominent ? Theme.accent : .primary)
-                .textSelection(.enabled)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .padding(.horizontal, Theme.Space.md)
-        .padding(.vertical, Theme.Space.sm)
+    private func copy() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(BuildInfo.summary, forType: .string)
+        justCopied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { justCopied = false }
     }
 }

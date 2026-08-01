@@ -11,7 +11,7 @@ struct DropZoneView: View {
     var body: some View {
         VStack(spacing: Theme.Space.sm) {
             Image(systemName: "arrow.down.doc")
-                .font(.system(size: 30, weight: .light))
+                .font(.system(size: 26, weight: .light))
                 .foregroundStyle(isTargeted ? Theme.accent : .secondary)
                 .symbolEffect(.bounce, value: isTargeted)
 

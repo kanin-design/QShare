@@ -31,9 +31,22 @@ struct QuickShareApp: App {
         }
         .menuBarExtraStyle(.menu)
 
-        Settings {
+        // A Window, not the Settings scene: Settings windows keep an opaque
+        // native title bar and toolbar that `.windowStyle(.hiddenTitleBar)`
+        // cannot override, so it can never match the rest of the app's glass
+        // chrome. A plain Window with the same style RootView uses can.
+        //
+        // id is "settings-panel", not "settings": macOS persists window
+        // frames per id across launches, and an earlier build briefly had a
+        // layout bug that saved a collapsed frame under "settings" — every
+        // relaunch kept restoring that broken size no matter what the
+        // current layout code did. A fresh id has no saved frame to inherit.
+        Window("Settings", id: "settings-panel") {
             SettingsView().environmentObject(model)
         }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultSize(width: 400, height: 520)
     }
 }
 
@@ -45,11 +58,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    // Note on the Help menu: `CommandGroup(replacing: .help) {}` removes its one
-    // dead item ("QShare Help"), leaving only the system search field. The menu
-    // itself can't be removed from here — AppKit reinstates it after launch, and
-    // stripping it from NSApp.mainMenu (also via NSApp.helpMenu) was verified
-    // not to stick. Left in place rather than fought with a timer.
+    // The Help menu itself can't be removed from here: AppKit reinstates it
+    // after launch, and stripping it via NSApp.mainMenu or NSApp.helpMenu
+    // doesn't stick. `CommandGroup(replacing: .help) {}` above is what
+    // actually removes its one dead item ("QShare Help"), leaving just the
+    // system search field.
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Closing the window drops the app to a menu-bar-only agent (no Dock icon).

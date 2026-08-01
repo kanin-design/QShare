@@ -54,7 +54,7 @@ final class AppModel: ObservableObject {
 
     // Global
     @Published var mode: AppMode = .send
-    /// Drives the ⌘⇧D build-info sheet; set from the menu command.
+    /// Drives the ⌘⌥I build-info sheet; set from the menu command.
     @Published var showingBuildInfo = false
     @Published var deviceName: String = AppModel.defaultDeviceName()
 

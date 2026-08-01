@@ -19,7 +19,7 @@ struct TransferRow: View {
         VStack(spacing: 0) {
             header
             if expanded {
-                Divider().overlay(Theme.hairline).padding(.leading, 38)
+                Divider().overlay(Theme.hairline).padding(.leading, 34)
                 fileList
             }
         }
@@ -31,7 +31,7 @@ struct TransferRow: View {
         .onHover { hovering = $0 }
     }
 
-    // MARK: Header (~40pt)
+    // MARK: Header
 
     private var header: some View {
         HStack(spacing: Theme.Space.sm) {
@@ -39,38 +39,42 @@ struct TransferRow: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(transfer.title)
-                    .font(.system(size: 12, weight: .medium)).lineLimit(1)
+                    .font(.system(size: 11, weight: .medium)).lineLimit(1)
                 Text("\(transfer.displaySize) · \(transfer.deviceName)")
-                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
             }
 
             Spacer(minLength: Theme.Space.sm)
             trailing
         }
         .padding(.horizontal, Theme.Space.md)
-        .padding(.vertical, 7)
-        .overlay(alignment: .bottom) {
-            if transfer.phase == .transferring {
-                GeometryReader { g in
-                    Capsule().fill(Theme.accent)
-                        .frame(width: g.size.width * transfer.fraction, height: 2)
-                }
-                .frame(height: 2)
-                .padding(.horizontal, Theme.Space.md)
-            }
-        }
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
         .onTapGesture(perform: primaryAction)
         .help(transfer.phase == .completed ? (isExpandable ? "Show files" : "Reveal in Finder") : "")
     }
 
+    /// The direction arrow doubles as the progress indicator: its own ring
+    /// fills in while transferring, instead of a separate progress bar
+    /// competing for space in an already-compact row.
     private var directionBadge: some View {
-        Image(systemName: transfer.direction == .incoming ? "arrow.down" : "arrow.up")
-            .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(transfer.direction == .incoming ? Theme.success : Theme.accent)
-            .frame(width: 20, height: 20)
-            .background((transfer.direction == .incoming ? Theme.success : Theme.accent).opacity(0.14),
-                        in: Circle())
+        let color = transfer.direction == .incoming ? Theme.success : Theme.accent
+        return ZStack {
+            if transfer.phase == .transferring {
+                Circle().stroke(color.opacity(0.2), lineWidth: 2)
+                Circle()
+                    .trim(from: 0, to: max(transfer.fraction, 0.02))
+                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.2), value: transfer.fraction)
+            } else {
+                Circle().fill(color.opacity(0.14))
+            }
+            Image(systemName: transfer.direction == .incoming ? "arrow.down" : "arrow.up")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(color)
+        }
+        .frame(width: 18, height: 18)
     }
 
     @ViewBuilder private var trailing: some View {
@@ -78,33 +82,40 @@ struct TransferRow: View {
         case .connecting, .awaitingConsent:
             ProgressView().controlSize(.small)
         case .transferring:
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Text("\(Int(transfer.fraction * 100))%")
-                    .font(.system(size: 10, weight: .medium)).monospacedDigit()
-                    .foregroundStyle(Theme.accent).contentTransition(.numericText())
+                    .font(.system(size: 9, weight: .medium)).monospacedDigit()
+                    .foregroundStyle(.secondary).contentTransition(.numericText())
                 Button(role: .cancel, action: onCancel) {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain).accessibilityLabel("Cancel transfer")
             }
         case .completed:
-            HStack(spacing: 6) {
+            // One trailing slot, not two: the checkmark is the resting state,
+            // and swaps to the reveal affordance on hover instead of the row
+            // permanently showing both.
+            ZStack {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 13)).foregroundStyle(Theme.success)
+                    .font(.system(size: 12)).foregroundStyle(Theme.success)
+                    .opacity(hovering ? 0 : 1)
                 if isExpandable {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
+                        .opacity(hovering ? 1 : 0)
                 } else if transfer.revealURL != nil {
                     Image(systemName: "arrow.up.forward")
-                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                        .opacity(hovering ? 1 : 0)
                 }
             }
+            .animation(.easeInOut(duration: 0.12), value: hovering)
         case .failed(let e):
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12)).foregroundStyle(Theme.danger).help(e)
+                .font(.system(size: 11)).foregroundStyle(Theme.danger).help(e)
         case .cancelled:
-            Image(systemName: "minus.circle.fill").font(.system(size: 12)).foregroundStyle(.secondary)
+            Image(systemName: "minus.circle.fill").font(.system(size: 11)).foregroundStyle(.secondary)
         }
     }
 
@@ -118,20 +129,20 @@ struct TransferRow: View {
                 } label: {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: icon(for: file))
-                            .font(.system(size: 11))
-                            .foregroundStyle(file.url == nil ? Color.secondary : Theme.accent)
-                            .frame(width: 16)
-                        Text(file.name).font(.system(size: 11)).lineLimit(1)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 14)
+                        Text(file.name).font(.system(size: 10)).lineLimit(1)
                             .foregroundStyle(file.url == nil ? .secondary : .primary)
                         Spacer()
                         if file.url != nil {
                             Image(systemName: "arrow.up.forward")
-                                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                                .font(.system(size: 8, weight: .semibold)).foregroundStyle(.tertiary)
                         }
                     }
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                     .padding(.trailing, Theme.Space.md)
-                    .padding(.leading, 38)
+                    .padding(.leading, 34)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).disabled(file.url == nil)

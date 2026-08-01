@@ -35,43 +35,31 @@ struct SendView: View {
             if model.discoveredDevices.isEmpty {
                 emptyDiscovery
             } else {
-                VStack(spacing: 2) {
-                    ForEach(model.discoveredDevices) { device in
-                        DeviceRow(device: device, action: { model.selectDevice(device) },
-                                  onDropFiles: { urls in
-                                      model.selectDevice(device)
-                                      model.stage(urls: urls)
-                                  })
+                Card(padding: Theme.Space.xs) {
+                    ElementList(items: model.discoveredDevices) { device in
+                        DeviceElement(device: device, action: { model.selectDevice(device) },
+                                      onDropFiles: { urls in
+                                          model.selectDevice(device)
+                                          model.stage(urls: urls)
+                                      })
                     }
                 }
-                .padding(Theme.Space.xs)
-                .glassSurface()
             }
 
-            Button {
-                model.startQRSend()
-            } label: {
-                HStack(spacing: Theme.Space.md) {
-                    Image(systemName: "qrcode").foregroundStyle(Theme.accent).frame(width: 28)
-                    Text("Don’t see your device? Use a QR code").primaryStyle()
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, Theme.Space.md)
-                .padding(.vertical, Theme.Space.sm + 2)
-                .contentShape(Rectangle())
-                .glassSurface(radius: Theme.Radius.control)
+            Card(padding: Theme.Space.xs) {
+                ActionElement(
+                    icon: "qrcode",
+                    title: "Use a QR code",
+                    subtitle: "For a device that can't see you over mDNS",
+                    action: { model.startQRSend() })
             }
-            .buttonStyle(.plain)
-            .focusEffectDisabled()
         }
     }
 
     private var emptyDiscovery: some View {
         VStack(spacing: Theme.Space.sm) {
             Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: 26))
+                .font(.system(size: 22))
                 .foregroundStyle(Theme.accent)
                 .symbolEffect(.variableColor.iterative, options: .repeating)
             Text("Looking for devices…")
