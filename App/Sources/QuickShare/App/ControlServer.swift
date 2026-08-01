@@ -14,6 +14,9 @@ import Security
 @MainActor
 final class ControlServer {
     nonisolated static let port: UInt16 = 47821
+    /// Gates the /debug/* routes to QS_MOCK runs only — the same switch that
+    /// enables the mock engine — so they're never reachable in a real build.
+    nonisolated static let debugEndpointsEnabled = ProcessInfo.processInfo.environment["QS_MOCK"] != nil
     private var listener: NWListener?
     private unowned let model: AppModel
     let token: String
@@ -126,6 +129,23 @@ final class ControlServer {
             model.cliSend(paths: paths, to: to) { result in
                 respond(Self.json(result.ok ? 200 : 502,
                                   ["ok": result.ok, "pin": result.pin as Any, "error": result.error as Any]))
+            }
+        // Debug-only: exist only under QS_MOCK, so this never ships reachable
+        // in a real build. Lets an incoming-request/notification round trip
+        // be tested with one `curl` call instead of a manual GUI run —
+        // reopening a closed window and checking for a system notification
+        // aren't things you can otherwise script.
+        case ("POST", "/debug/incoming-request") where Self.debugEndpointsEnabled:
+            let obj = (try? JSONSerialization.jsonObject(with: req.body) as? [String: Any]) ?? [:]
+            model.debugFireIncomingRequest(
+                deviceName: (obj["device"] as? String) ?? "Debug Phone",
+                files: (obj["files"] as? [String]) ?? [],
+                bytes: (obj["bytes"] as? Int).map(Int64.init) ?? 2_400_000,
+                pin: (obj["pin"] as? String) ?? String(format: "%04d", Int.random(in: 0...9999)))
+            respond(Self.json(200, ["ok": true]))
+        case ("GET", "/debug/notifications") where Self.debugEndpointsEnabled:
+            model.debugNotificationStatus { delivered, authorization in
+                respond(Self.json(200, ["authorization": authorization, "delivered": delivered]))
             }
         default:
             respond(Self.json(404, ["error": "not found"]))

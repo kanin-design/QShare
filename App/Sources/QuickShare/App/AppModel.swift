@@ -88,6 +88,12 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var incomingRequest: IncomingRequest? = nil
+    /// Bumped on every incoming request, accepted automatically or not.
+    /// `AppModel` can't call `openWindow` itself — that's a View-only
+    /// environment action — so this is what a View (`MenuBarView`, always
+    /// alive via the menu-bar item) watches to reopen the main window when
+    /// it was closed and something just happened that the user should see.
+    @Published private(set) var incomingActivityToken = UUID()
 
     // Send side
     @Published var discoveredDevices: [RemoteDevice] = []
@@ -244,6 +250,48 @@ final class AppModel: ObservableObject {
         cliPins.removeAll()
         for (_, completion) in pending {
             completion(CliSendResult(ok: false, pin: nil, error: error))
+        }
+    }
+
+    // MARK: Debug (QS_MOCK only — see ControlServer's /debug/* gating)
+
+    /// Synthesizes an incoming request as if it had just arrived over the
+    /// network, exercising the exact same path a real one takes — auto-accept
+    /// check, app activation, the window-reopen token — from a single CLI
+    /// call instead of a GUI test run.
+    func debugFireIncomingRequest(deviceName: String, files: [String], bytes: Int64, pin: String) {
+        let request = IncomingRequest(
+            id: "debug-\(UUID().uuidString.prefix(6))",
+            device: RemoteDevice(id: "debug-\(deviceName)", name: deviceName, type: .phone),
+            fileNames: files.isEmpty ? ["debug-file.txt"] : files,
+            totalBytes: bytes,
+            pin: pin)
+        serviceDidReceiveIncomingRequest(request)
+    }
+
+    /// What the system has actually recorded as delivered, plus current
+    /// permission status — the only reliable way to confirm a notification
+    /// really reached the system, rather than screenshotting a banner that's
+    /// gone in a few seconds.
+    func debugNotificationStatus(completion: @escaping (_ delivered: [[String: Any]], _ authorization: String) -> Void) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
+                let delivered: [[String: Any]] = notifications.map {
+                    ["id": $0.request.identifier,
+                     "title": $0.request.content.title,
+                     "body": $0.request.content.body]
+                }
+                let authorization: String
+                switch settings.authorizationStatus {
+                case .authorized:    authorization = "authorized"
+                case .denied:        authorization = "denied"
+                case .notDetermined: authorization = "notDetermined"
+                case .provisional:   authorization = "provisional"
+                case .ephemeral:     authorization = "ephemeral"
+                @unknown default:    authorization = "unknown"
+                }
+                Task { @MainActor in completion(delivered, authorization) }
+            }
         }
     }
 
@@ -569,17 +617,24 @@ extension AppModel: QuickShareServiceDelegate {
     }
 
     func serviceDidReceiveIncomingRequest(_ request: IncomingRequest) {
+        // `NSApp` is an implicitly-unwrapped global that is nil outside a running
+        // GUI app. This path is driven by network input, so don't force it.
+        if let app = NSApp { app.activate(ignoringOtherApps: true) }
+        // Reopens the main window if it was closed — `NSApp.activate` alone
+        // only reorders existing windows, it can't bring back a closed one.
+        incomingActivityToken = UUID()
+
         if autoAccepts(request.device.name) {
-            // Opted in for this sender: take it without interrupting, but say so
-            // rather than letting files appear from nowhere.
+            // Opted in for this sender: take it without interrupting, but
+            // still surface the app — otherwise a transfer that needed no
+            // confirmation was also the one case that never brought the
+            // window forward, so it went unnoticed unless Receive already
+            // happened to be the front tab.
             acceptIncoming(request)
             notifyAutoAccepted(request)
             return
         }
-        incomingRequest = request
-        // `NSApp` is an implicitly-unwrapped global that is nil outside a running
-        // GUI app. This path is driven by network input, so don't force it.
-        if let app = NSApp { app.activate(ignoringOtherApps: true) }   // surface the prompt
+        incomingRequest = request   // surface the prompt
     }
 
     /// An auto-accepted transfer should still be visible to the user.

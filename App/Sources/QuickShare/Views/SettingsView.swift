@@ -91,9 +91,11 @@ struct SettingsView: View {
         Card {
             // Same row shape as "Visible on launch": a label on the left,
             // the control right-aligned — not a full-width picker with no
-            // label, which was the odd one out among these rows.
+            // label, which was the odd one out among these rows. Labeled
+            // "Theme", not "Appearance" again — the section header already
+            // says that; repeating it as the row label too was redundant.
             HStack {
-                Text("Appearance").primaryStyle()
+                Text("Theme").primaryStyle()
                 Spacer()
                 Picker("", selection: Binding(
                     get: { model.appearance },
