@@ -28,12 +28,12 @@ struct SettingsView: View {
         // that collapsed the window to nothing.
         VStack(spacing: 0) {
             header
-            VStack(spacing: Theme.Space.lg) {
-                downloadsCard
-                appearanceCard
-                servicesCard
+            VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                section("Downloads") { downloadsCard }
+                section("Appearance") { appearanceCard }
+                section("Services") { servicesCard }
                 if !model.knownDevices.isEmpty {
-                    knownSendersCard
+                    section("Known senders") { knownSendersCard }
                 }
             }
             .padding(Theme.Space.lg)
@@ -43,7 +43,7 @@ struct SettingsView: View {
         .background(Theme.windowTint)
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
-        .preferredColorScheme(model.appearance.colorScheme)
+        .preferredColorScheme(model.effectiveColorScheme)
         .focusEffectDisabled()
     }
 
@@ -56,10 +56,21 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, minHeight: 28)
     }
 
+    /// A category label above its card, not a title inside it — the same
+    /// grouped-list shape System Settings uses, and the one every other
+    /// screen in this app already follows (`SectionHeader` + `Card`); this
+    /// screen was the one holdout still putting the label inside the box.
+    @ViewBuilder
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.md) {
+            SectionHeader(title: title)
+            content()
+        }
+    }
+
     private var downloadsCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("Downloads").cardTitle()
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: "folder").foregroundStyle(.secondary)
                     Text(model.downloadDirectory.path)
@@ -74,17 +85,14 @@ struct SettingsView: View {
 
     private var appearanceCard: some View {
         Card {
-            VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("Appearance").cardTitle()
-                Picker("", selection: Binding(
-                    get: { model.appearance },
-                    set: { model.setAppearance($0) }
-                )) {
-                    ForEach(AppAppearance.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+            Picker("", selection: Binding(
+                get: { model.appearance },
+                set: { model.setAppearance($0) }
+            )) {
+                ForEach(AppAppearance.allCases) { Text($0.rawValue).tag($0) }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
         }
     }
 
@@ -92,28 +100,25 @@ struct SettingsView: View {
     /// line up exactly with every other multi-row card (e.g. Known senders).
     private var servicesCard: some View {
         Card {
-            VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("Services").cardTitle()
-                ElementList(items: [
-                    ServiceToggle(
-                        id: "visible",
-                        title: "Visible on launch",
-                        subtitle: "Start advertising to nearby devices at startup.",
-                        isOn: Binding(get: { model.startVisible },
-                                      set: { model.setStartVisible($0) })),
-                    // Named for what it is: a local HTTP server. The qshare command
-                    // is one client of it, not the whole story.
-                    ServiceToggle(
-                        id: "api",
-                        title: "Local API server",
-                        subtitle: "Lets the qshare command drive the app.",
-                        help: "Serves 127.0.0.1:\(String(ControlServer.port)). Anything running as you can then send any file it can read.",
-                        isOn: Binding(get: { model.controlAPIEnabled },
-                                      set: { model.setControlAPIEnabled($0) }))
-                ], separator: .divider) { item in
-                    ToggleElement(title: item.title, subtitle: item.subtitle, isOn: item.isOn)
-                        .help(item.help ?? "")
-                }
+            ElementList(items: [
+                ServiceToggle(
+                    id: "visible",
+                    title: "Visible on launch",
+                    subtitle: "Start advertising to nearby devices at startup.",
+                    isOn: Binding(get: { model.startVisible },
+                                  set: { model.setStartVisible($0) })),
+                // Named for what it is: a local HTTP server. The qshare command
+                // is one client of it, not the whole story.
+                ServiceToggle(
+                    id: "api",
+                    title: "Local API server",
+                    subtitle: "Lets the qshare command drive the app.",
+                    help: "Serves 127.0.0.1:\(String(ControlServer.port)). Anything running as you can then send any file it can read.",
+                    isOn: Binding(get: { model.controlAPIEnabled },
+                                  set: { model.setControlAPIEnabled($0) }))
+            ]) { item in
+                ToggleElement(title: item.title, subtitle: item.subtitle, isOn: item.isOn)
+                    .help(item.help ?? "")
             }
         }
     }
@@ -124,10 +129,9 @@ struct SettingsView: View {
     private var knownSendersCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
-                Text("Known senders").cardTitle()
                 Text("Auto-accept skips the prompt for future transfers.")
                     .secondaryStyle()
-                ElementList(items: model.knownDevices, separator: .divider) { device in
+                ElementList(items: model.knownDevices) { device in
                     ToggleElement(
                         icon: device.autoAccept ? "checkmark.shield.fill" : "iphone.gen3",
                         iconColor: device.autoAccept ? Theme.success : .secondary,

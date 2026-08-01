@@ -60,10 +60,10 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
-        .background(Theme.windowTint)               // faint neutral wash over the material
+        .background(Theme.windowTint)               // faint blue wash over the material
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
-        .preferredColorScheme(model.appearance.colorScheme)
+        .preferredColorScheme(model.effectiveColorScheme)
         .focusEffectDisabled()          // mouse-only app — no keyboard focus rings
         .animation(.easeInOut(duration: 0.2), value: model.connection)
         // ⌘⌥I — which build am I running? Driven by the menu command so the

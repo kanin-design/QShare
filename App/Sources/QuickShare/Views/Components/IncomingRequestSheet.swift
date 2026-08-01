@@ -69,7 +69,7 @@ struct IncomingRequestSheet: View {
         .background(Theme.windowTint)
         .containerBackground(.regularMaterial, for: .window)
         .tint(Theme.accent)
-        .preferredColorScheme(model.appearance.colorScheme)
+        .preferredColorScheme(model.effectiveColorScheme)
         .focusEffectDisabled()
     }
 }

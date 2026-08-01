@@ -209,10 +209,11 @@ struct ScrollerHider: NSViewRepresentable {
 }
 
 extension View {
-    /// Neutral glass + hairline border in a continuous rounded rect. Cards use
+    /// Tinted glass + hairline border in a continuous rounded rect. Cards use
     /// a heavier material than the window (`.thickMaterial` vs. the window's
-    /// `.regularMaterial`) — that weight difference is what makes a card read
-    /// as its own surface instead of blending into the background.
+    /// `.regularMaterial`) — that weight difference, plus `Theme.panelTint`'s
+    /// blue wash, is what makes a card read as its own surface instead of
+    /// blending into the background.
     func glassSurface(radius: CGFloat = Theme.Radius.card) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return self

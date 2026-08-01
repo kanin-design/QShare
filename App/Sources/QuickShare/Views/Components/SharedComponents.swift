@@ -63,36 +63,29 @@ struct GlassSwitch: View {
     }
 }
 
-/// Arranges rows inside a `Card` — the only place a divider or a gap gets
-/// drawn between rows, so no call site has to decide that for itself.
-/// `.divider` is a settings-table shape (Services, Known senders): a hairline
-/// inset under the text, the way System Settings' own toggle lists draw it —
-/// not a bold rule the way our first attempt at this drew it. `.gap` is the
-/// hover-highlight shape for picker-style lists (Nearby devices, Transfers),
-/// where a permanent line would fight the hover background.
+/// Arranges rows inside a `Card`, the one place every row list in the app
+/// (Services, Known senders, Nearby devices, Transfers) gets its shape from.
+/// Every row but the last carries a hairline on its own bottom edge — an
+/// overlay, not a separately inserted spacer view, so it draws into the
+/// existing row spacing rather than adding any height of its own. Faint by
+/// design: System Settings' own row rule is barely there, not a bold line.
 struct ElementList<Item: Identifiable, Row: View>: View {
-    enum Separator { case divider, gap }
-
     let items: [Item]
-    var separator: Separator = .gap
     @ViewBuilder let row: (Item) -> Row
 
     var body: some View {
-        switch separator {
-        case .divider:
-            VStack(alignment: .leading, spacing: Theme.Space.md) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    row(item)
-                    if index < items.count - 1 {
-                        Divider()
-                            .overlay(Theme.hairline.opacity(0.6))
-                            .padding(.leading, 20)
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                row(item)
+                    .overlay(alignment: .bottom) {
+                        if index < items.count - 1 {
+                            Rectangle()
+                                .fill(Theme.hairline.opacity(0.3))
+                                .frame(height: 0.5)
+                                .padding(.leading, 20)
+                                .padding(.trailing, 4)
+                        }
                     }
-                }
-            }
-        case .gap:
-            VStack(spacing: 2) {
-                ForEach(items) { row($0) }
             }
         }
     }

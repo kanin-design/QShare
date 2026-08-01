@@ -15,13 +15,6 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     case light = "Light"
     case dark = "Dark"
     var id: String { rawValue }
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system: return nil
-        case .light:  return .light
-        case .dark:   return .dark
-        }
-    }
 }
 
 /// State of the send flow.
@@ -126,6 +119,25 @@ final class AppModel: ObservableObject {
     @Published var downloadDirectory: URL = AppModel.defaultDownloadDirectory()
     @Published var startVisible: Bool = false
     @Published var appearance: AppAppearance = .system
+    /// Live system dark/light, so "System" can resolve to a concrete
+    /// ColorScheme rather than nil — `.preferredColorScheme(nil)` doesn't
+    /// reliably reset a window that was previously forced to Light or Dark,
+    /// so "System" is expressed as "whichever concrete scheme matches right
+    /// now" instead of "no override," and this is what keeps that current.
+    @Published private var systemIsDark: Bool = AppModel.currentSystemIsDark()
+    private var systemAppearanceObserver: NSObjectProtocol?
+
+    var effectiveColorScheme: ColorScheme {
+        switch appearance {
+        case .system: return systemIsDark ? .dark : .light
+        case .light:  return .light
+        case .dark:   return .dark
+        }
+    }
+
+    private nonisolated static func currentSystemIsDark() -> Bool {
+        UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+    }
     /// Localhost control API for the `qshare` CLI. Off by default: it can read
     /// any path the user can and push it to a nearby device, so it's opt-in.
     @Published var controlAPIEnabled: Bool = false
@@ -158,10 +170,21 @@ final class AppModel: ObservableObject {
         self.service.startDiscovery()
         if controlAPIEnabled { startControlServer() }
 
+        systemAppearanceObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.systemIsDark = AppModel.currentSystemIsDark() }
+        }
+
         if ProcessInfo.processInfo.environment["QS_MOCK"] != nil {
             deviceName = "MacBook Pro"   // neutral name for demo screenshots
             transfers = DemoData.transfers()
         }
+    }
+
+    deinit {
+        systemAppearanceObserver.map(DistributedNotificationCenter.default().removeObserver)
     }
 
     // MARK: CLI / control API
