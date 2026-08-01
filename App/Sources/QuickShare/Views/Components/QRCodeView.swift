@@ -9,7 +9,7 @@ struct QRCodeView: View {
     let payload: String
     var size: CGFloat = 200
 
-    private static let navy = Color(red: 0.09, green: 0.13, blue: 0.34)
+    private static var navy: Color { Theme.qrInk }
 
     var body: some View {
         ZStack {

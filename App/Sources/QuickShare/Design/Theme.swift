@@ -10,7 +10,28 @@ enum Theme {
     // MARK: Color
     static let accent = Color(red: 0.16, green: 0.51, blue: 0.96)
     static let success = Color(red: 0.20, green: 0.72, blue: 0.44)
+    /// True red — off states, failures, the "not visible" side of the
+    /// visibility toggle. Kept distinct from `orange` below: merging them
+    /// earlier meant the off-state couldn't read as red anymore.
     static let danger = Color(red: 0.90, green: 0.32, blue: 0.32)
+    /// Muted warm orange — decorative/informational accents like the
+    /// "Downloads" link. A different role from `danger` (nothing's wrong),
+    /// so it's its own token, not a red variant.
+    static let orange = Color(red: 0.85, green: 0.55, blue: 0.15)
+    /// QR ink: always dark navy on white, independent of app theme — a QR
+    /// code needs strong fixed contrast to scan, not a light/dark adaptive
+    /// color. Centralized here so it isn't a private literal only QRCodeView
+    /// knows about.
+    static let qrInk = Color(red: 0.09, green: 0.13, blue: 0.34)
+
+    // MARK: Text color tokens
+    // The typography styles below and a handful of one-off "matches style X"
+    // spots (PinBadge, badge numbers, the transfer percentage) both read
+    // from these — not a hand-copied value that only looks the same. Change
+    // one of these and every consumer moves together.
+    static let textProminent: Color = .primary     // section/card/body text
+    static let textMuted: Color = .secondary       // subtext, badge numbers, percentages
+    static let textWindowHeader = Color.primary.opacity(0.9)
 
     /// Blue lift over the material for panels/cards — enough to feel
     /// intentional, well short of the wash that used to drown out the accent
@@ -55,25 +76,36 @@ enum Theme {
 
 }
 
-// MARK: - Typography (the whole system — three styles, nothing else)
+// MARK: - Typography
+// Every style here, and every one-off spot elsewhere that needs to "match"
+// one of them (PinBadge, badge numbers, the transfer percentage), reads its
+// color from the Theme.text* tokens above — never a hand-copied value.
 
 // Type scale (SF Pro): 13 / 12 / 11 / 10, big → small.
 extension View {
-    /// Group header — most prominent.
+    /// Group header — most prominent. Used only via `SectionHeader`.
+    /// Hierarchy comes from size/weight, not color — section, card, and body
+    /// text all share the same plain text color on purpose.
     func sectionStyle() -> some View {
-        font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary)
+        font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textProminent)
     }
     /// Card headline.
     func cardTitle() -> some View {
-        font(.system(size: 12, weight: .semibold)).foregroundStyle(.primary)
+        font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.textProminent)
     }
     /// Body content.
     func primaryStyle() -> some View {
-        font(.system(size: 11, weight: .regular)).foregroundStyle(.primary)
+        font(.system(size: 11, weight: .regular)).foregroundStyle(Theme.textProminent)
     }
     /// Muted subtext.
     func secondaryStyle() -> some View {
-        font(.system(size: 10, weight: .regular)).foregroundStyle(.secondary)
+        font(.system(size: 10, weight: .regular)).foregroundStyle(Theme.textMuted)
+    }
+    /// Window title sitting on the traffic-light row ("QShare", "Settings").
+    /// Was hand-typed identically in RootView and SettingsView — pulled out
+    /// once it turned out to be the exact same style defined twice.
+    func windowHeaderStyle() -> some View {
+        font(.system(size: 12, weight: .light)).foregroundStyle(Theme.textWindowHeader)
     }
 }
 

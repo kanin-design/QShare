@@ -25,19 +25,17 @@ struct IncomingRequestSheet: View {
 
             VStack(spacing: 3) {
                 Text("\(request.device.name) wants to send")
-                    .font(.system(size: 15, weight: .semibold))
+                    .sectionStyle()
                     .multilineTextAlignment(.center)
                 Text("\(request.summary) · \(request.displaySize)")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .secondaryStyle()
             }
 
             PinBadge(pin: request.pin)
 
             if isKnown {
                 Label("You've accepted from this device before", systemImage: "clock.arrow.circlepath")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .secondaryStyle()
             }
 
             // Compact switch: this is a per-device choice, not a service.
@@ -53,6 +51,8 @@ struct IncomingRequestSheet: View {
                 Button("Decline", role: .cancel, action: onDecline)
                     .controlSize(.large)
                     .keyboardShortcut(.cancelAction)
+                    .tint(Theme.orange)
+                    .foregroundStyle(Theme.orange)
 
                 // Deliberately NOT `.defaultAction`: this sheet appears
                 // unprompted and activates the app, so binding Accept to Return

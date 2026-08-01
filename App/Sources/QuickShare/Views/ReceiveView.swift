@@ -31,7 +31,10 @@ struct ReceiveView: View {
                     ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.secondary),
                 isOn: Binding(get: { model.wantsVisible }, set: { model.setVisible($0) }),
                 switchStyle: .glass,
-                glassOnColor: Theme.accent,
+                // No color override — GlassSwitch's own defaults are exactly
+                // the red/green this one special toggle needs (green =
+                // visible, red = not), unlike every other toggle in the app,
+                // which is a plain native blue switch.
                 accessibilityLabel: "Visible to nearby devices")
             .animation(.easeInOut(duration: 0.2), value: model.visibilityStatus)
         }
@@ -65,7 +68,7 @@ struct ReceiveView: View {
                 step(2, "Choose “\(model.deviceName)” from the list of nearby devices.")
                 step(3, "Confirm the PIN, and files land in [\(model.downloadDirectory.lastPathComponent)](qshare://folder).")
             }
-            .tint(Theme.accent)
+            .tint(Theme.orange)
             .environment(\.openURL, OpenURLAction { _ in
                 NSWorkspace.shared.open(model.downloadDirectory)
                 return .handled
@@ -77,7 +80,9 @@ struct ReceiveView: View {
         HStack(alignment: .top, spacing: Theme.Space.md) {
             Text("\(n)")
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+                // Muted badge number — same color as secondaryStyle's, kept
+                // at its own small size to fit the fixed 16pt circle.
+                .foregroundStyle(Theme.textMuted)
                 .frame(width: 16, height: 16)
                 .background(Color.primary.opacity(0.08), in: Circle())
             Text(text).primaryStyle()

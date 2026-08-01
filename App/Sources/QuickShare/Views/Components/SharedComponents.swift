@@ -30,7 +30,7 @@ struct GlassSwitch: View {
     /// service-level ones, so they're drawn smaller.
     var size: Size = .regular
     var onColor: Color = Theme.success
-    var offColor: Color = Color(red: 0.85, green: 0.29, blue: 0.29)
+    var offColor: Color = Theme.danger
 
     enum Size {
         case regular, compact
@@ -241,10 +241,13 @@ struct PinBadge: View {
                 .font(.system(.title, design: .monospaced).weight(.semibold))
                 .tracking(6)
                 .monospacedDigit()
+                // The most prominent text in this sheet — reads Theme.textProminent
+                // directly (same source sectionStyle uses), kept at its own
+                // large monospaced size for digit legibility.
+                .foregroundStyle(Theme.textProminent)
                 .contentTransition(.numericText())
             Text("Make sure this matches the code on the other device")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .secondaryStyle()
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

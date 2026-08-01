@@ -51,8 +51,7 @@ struct SettingsView: View {
     // traffic-light buttons (28pt band), no divider.
     private var header: some View {
         Text("Settings")
-            .font(.system(size: 12, weight: .light))
-            .foregroundStyle(.primary.opacity(0.9))
+            .windowHeaderStyle()
             .frame(maxWidth: .infinity, minHeight: 28)
     }
 
@@ -74,9 +73,14 @@ struct SettingsView: View {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: "folder").foregroundStyle(.secondary)
                     Text(model.downloadDirectory.path)
-                        .secondaryStyle().lineLimit(1).truncationMode(.middle)
+                        .primaryStyle().lineLimit(1).truncationMode(.middle)
                     Spacer()
                     Button("Change…", action: chooseFolder)
+                        // .tint alone only recolors a bordered button's label
+                        // in dark appearance — light mode keeps black text
+                        // regardless, so the label color needs setting directly too.
+                        .tint(Theme.orange)
+                        .foregroundStyle(Theme.orange)
                 }
                 Text("Received files are saved here.").secondaryStyle()
             }
@@ -85,14 +89,22 @@ struct SettingsView: View {
 
     private var appearanceCard: some View {
         Card {
-            Picker("", selection: Binding(
-                get: { model.appearance },
-                set: { model.setAppearance($0) }
-            )) {
-                ForEach(AppAppearance.allCases) { Text($0.rawValue).tag($0) }
+            // Same row shape as "Visible on launch": a label on the left,
+            // the control right-aligned — not a full-width picker with no
+            // label, which was the odd one out among these rows.
+            HStack {
+                Text("Appearance").primaryStyle()
+                Spacer()
+                Picker("", selection: Binding(
+                    get: { model.appearance },
+                    set: { model.setAppearance($0) }
+                )) {
+                    ForEach(AppAppearance.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
         }
     }
 
@@ -143,6 +155,8 @@ struct SettingsView: View {
                     ) {
                         Button("Forget") { model.forget(device.name) }
                             .controlSize(.small)
+                            .tint(Theme.orange)
+                            .foregroundStyle(Theme.orange)
                     }
                 }
             }

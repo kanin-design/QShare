@@ -25,7 +25,7 @@ struct TransfersList: View {
                 Button("Clear", action: onClear)
                     .buttonStyle(.plain)
                     .font(.system(size: 11))
-                    .foregroundStyle(Theme.accent)
+                    .foregroundStyle(Theme.orange)
             ))
 
             Card(padding: Theme.Space.xs, maxHeight: maxHeight) {

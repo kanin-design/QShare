@@ -25,7 +25,10 @@ struct DebugInfoSheet: View {
 
                 Text(justCopied ? "Copied to clipboard" : BuildInfo.commit)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(justCopied ? AnyShapeStyle(Theme.success) : AnyShapeStyle(.secondary))
+                    // Resting state reads Theme.textMuted directly (same
+                    // source secondaryStyle uses); the copied-flash state is
+                    // the real Theme.success signal.
+                    .foregroundStyle(justCopied ? AnyShapeStyle(Theme.success) : AnyShapeStyle(Theme.textMuted))
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: copy)
@@ -48,7 +51,7 @@ struct DebugInfoSheet: View {
             Button("Done", action: onClose)
                 .buttonStyle(.plain)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(Theme.orange)
                 .keyboardShortcut(.cancelAction)
         }
         .multilineTextAlignment(.center)

@@ -99,8 +99,7 @@ struct RootView: View {
     // the traffic-light buttons (28pt band), no divider.
     private var header: some View {
         Text("QShare")
-            .font(.system(size: 12, weight: .light))
-            .foregroundStyle(.primary.opacity(0.9))
+            .windowHeaderStyle()
             .frame(maxWidth: .infinity, minHeight: 28)
     }
 

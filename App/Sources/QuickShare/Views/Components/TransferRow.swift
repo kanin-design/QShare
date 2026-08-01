@@ -39,9 +39,9 @@ struct TransferRow: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(transfer.title)
-                    .font(.system(size: 11, weight: .medium)).lineLimit(1)
+                    .primaryStyle().lineLimit(1)
                 Text("\(transfer.displaySize) · \(transfer.deviceName)")
-                    .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
+                    .secondaryStyle().lineLimit(1)
             }
 
             Spacer(minLength: Theme.Space.sm)
@@ -85,7 +85,7 @@ struct TransferRow: View {
             HStack(spacing: 5) {
                 Text("\(Int(transfer.fraction * 100))%")
                     .font(.system(size: 9, weight: .medium)).monospacedDigit()
-                    .foregroundStyle(.secondary).contentTransition(.numericText())
+                    .foregroundStyle(Theme.textMuted).contentTransition(.numericText())
                 Button(role: .cancel, action: onCancel) {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
