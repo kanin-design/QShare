@@ -37,12 +37,30 @@ public final class ServiceBrowser {
                 }
             }
         }
+        // Release the reference only once the browse has actually reached
+        // `.cancelled` — see `stop()`.
+        browser.stateUpdateHandler = { [weak self] state in
+            guard case .cancelled = state else { return }
+            Task { @MainActor in
+                guard let self, self.browser === browser else { return }
+                browser.browseResultsChangedHandler = nil
+                browser.stateUpdateHandler = nil
+                self.browser = nil
+            }
+        }
         browser.start(queue: .global(qos: .userInitiated))
     }
 
     public func stop() {
-        browser?.cancel()
-        browser = nil
+        guard let browser else { return }
+        // `cancel()` is asynchronous. Dropping the last strong reference here —
+        // which is what `browser = nil` straight after `cancel()` used to do —
+        // leaves the underlying nw_browser mid-teardown with its handlers still
+        // registered, and it never finishes: the process kept taking mDNS
+        // multicast wakeups (~7% of a core, sustained) long after discovery was
+        // supposedly stopped. Hold the reference and let `stateUpdateHandler`
+        // clear it when cancellation completes.
+        browser.cancel()
         found.removeAll()
     }
 
