@@ -102,7 +102,7 @@ struct ElementList<Item: Identifiable, Row: View>: View {
                     .overlay(alignment: .bottom) {
                         if index < items.count - 1 {
                             Rectangle()
-                                .fill(Theme.hairline.opacity(0.3))
+                                .fill(Theme.hairline)
                                 .frame(height: 0.5)
                                 .padding(.leading, 20)
                                 .padding(.trailing, 4)

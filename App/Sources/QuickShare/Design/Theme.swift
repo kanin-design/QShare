@@ -74,13 +74,29 @@ enum Theme {
         dark: NSColor(srgbRed: 0.09, green: 0.16, blue: 0.30, alpha: 0.18),
         light: NSColor(srgbRed: 0.65, green: 0.78, blue: 0.95, alpha: 0.14))
 
-    /// Hairline border for panels.
-    /// Carries more weight than a true hairline: now that surfaces are thin
-    /// enough to see the desktop through, edges rather than opacity are what
-    /// separate a card from the window behind it.
+    /// Internal rules: the separator between rows in an `ElementList`, and the
+    /// divider inside an expanded transfer. Deliberately not the same token as
+    /// `cardBorder` below — one draws *inside* a surface, the other draws its
+    /// outline, and tuning the outline for the material-less card design was
+    /// silently darkening every row rule along with it.
+    ///
+    /// This is the value that actually reaches the screen. It used to be read
+    /// through a `.opacity(0.3)` at the one call site that mattered, which
+    /// meant the number here and the rule you saw were four times apart —
+    /// impossible to reason about when tuning.
     static let hairline = dynamic(
-        dark: NSColor(white: 1, alpha: 0.34),
-        light: NSColor(white: 0, alpha: 0.24))
+        dark: NSColor(white: 1, alpha: 0.08),
+        light: NSColor(white: 0, alpha: 0.06))
+
+    /// The outline that separates a card from the window behind it.
+    ///
+    /// Drawn at 0.5pt — one physical pixel on a Retina display. At 1pt it is
+    /// two, which stops reading as an edge and starts reading as a drawn
+    /// border. With no material of its own the card leans on `panelTint` for
+    /// most of its separation; this only has to close the shape, not define it.
+    static let cardBorder = dynamic(
+        dark: NSColor(white: 1, alpha: 0.14),
+        light: NSColor(white: 0, alpha: 0.10))
 
     private static func dynamic(dark: NSColor, light: NSColor) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
@@ -342,6 +358,6 @@ extension View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return self
             .background { shape.fill(Theme.panelTint) }
-            .overlay(shape.strokeBorder(Theme.hairline, lineWidth: 1))
+            .overlay(shape.strokeBorder(Theme.cardBorder, lineWidth: 0.5))
     }
 }
