@@ -57,7 +57,7 @@ struct MenuBarView: View {
 
     private func openMainWindow() {
         NSApp.setActivationPolicy(.regular)   // restore Dock icon while the window is up
-        openWindow(id: "main")
+        openWindow(id: "main-window")
         NSApp.activate(ignoringOtherApps: true)
     }
 }

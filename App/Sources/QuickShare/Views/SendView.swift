@@ -80,7 +80,7 @@ struct SendView: View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
             SectionHeader(title: title, trailing: AnyView(
                 Button("Back") { model.cancelSend() }
-                    .buttonStyle(.bordered).controlSize(.small).tint(.secondary)
+                    .buttonStyle(.glass).controlSize(.small).tint(.secondary)
             ))
 
             DropZoneView { urls in model.stage(urls: urls) }
@@ -97,7 +97,7 @@ struct SendView: View {
             Label("Send \(sendTitle)", systemImage: "paperplane.fill").frame(maxWidth: .infinity)
         }
         .controlSize(.large)
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.glassProminent)
     }
 
     private var showQRButton: some View {
@@ -105,7 +105,7 @@ struct SendView: View {
             Label("Show QR code", systemImage: "qrcode").frame(maxWidth: .infinity)
         }
         .controlSize(.large)
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.glassProminent)
     }
 
     private var stagedList: some View {
@@ -153,7 +153,7 @@ struct SendView: View {
             }
 
             Button("Cancel", role: .cancel) { model.cancelSend() }
-                .buttonStyle(.bordered).controlSize(.large).tint(.secondary)
+                .buttonStyle(.glass).controlSize(.large).tint(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Theme.Space.sm)

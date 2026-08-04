@@ -31,7 +31,7 @@ enum WindowPlacement {
     }
 
     /// Identifier of the `Window(id:)` scene in `QuickShareApp`.
-    private static let mainWindowID = "main"
+    private static let mainWindowID = "main-window"
 
     /// The main window, identified explicitly.
     ///

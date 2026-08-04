@@ -49,10 +49,14 @@ struct IncomingRequestSheet: View {
 
             HStack(spacing: Theme.Space.md) {
                 Button("Decline", role: .cancel, action: onDecline)
+                    .buttonStyle(.glass)
                     .controlSize(.large)
                     .keyboardShortcut(.cancelAction)
-                    .tint(Theme.orange)
-                    .foregroundStyle(Theme.orange)
+                    // Without an explicit tint, `.glass` inherits the sheet's
+                    // ambient `.tint(Theme.accent)` and fills solid blue —
+                    // indistinguishable from Accept. Force it back to a
+                    // neutral secondary action instead.
+                    .tint(.secondary)
 
                 // Deliberately NOT `.defaultAction`: this sheet appears
                 // unprompted and activates the app, so binding Accept to Return
@@ -61,13 +65,12 @@ struct IncomingRequestSheet: View {
                     Text("Accept").frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
             }
         }
         .padding(Theme.Space.xl)
         .frame(width: 290)
-        .background(Theme.windowTint)
-        .containerBackground(.regularMaterial, for: .window)
+        .glassWindowBackground()
         .tint(Theme.accent)
         .preferredColorScheme(model.effectiveColorScheme)
         .focusEffectDisabled()

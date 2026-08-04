@@ -7,50 +7,117 @@ import AppKit
 /// to light/dark.
 enum Theme {
 
+    // MARK: Debug color override
+    //
+    // Two independent gates. `#if DEBUG` means `colorDebug` is hardcoded
+    // `false` in a release build (Packaging/build-app.sh release) — no
+    // matter what the line below says, release can never show these.
+    // `colorDebug` is a plain bool on top of that: flip it to switch every
+    // token below between its real value and its debug value, in any debug
+    // build, with no other edit needed. Defaults to `false` — the debug
+    // palette is opt-in, not the default look of a debug build.
+    //
+    // Every token has its own debug color, each visually distinct from
+    // every other token's — so turning this on tells you two things at
+    // once: which named token is used where (nothing here looks like
+    // anything else), and whether something you're looking at is actually
+    // reading from `Theme` at all (a stray hardcoded color won't move).
+    #if DEBUG
+    static let colorDebug = false
+    #else
+    static let colorDebug = false
+    #endif
+
     // MARK: Color
-    static let accent = Color(red: 0.16, green: 0.51, blue: 0.96)
-    static let success = Color(red: 0.20, green: 0.72, blue: 0.44)
+    static var accent: Color {
+        colorDebug ? Color(red: 0.95, green: 0.25, blue: 0.55) : Color(red: 0.16, green: 0.51, blue: 0.96)
+    }
+    static var success: Color {
+        colorDebug ? Color(red: 0.10, green: 0.80, blue: 0.75) : Color(red: 0.20, green: 0.72, blue: 0.44)
+    }
     /// True red — off states, failures, the "not visible" side of the
-    /// visibility toggle. Kept distinct from `orange` below: merging them
-    /// earlier meant the off-state couldn't read as red anymore.
-    static let danger = Color(red: 0.90, green: 0.32, blue: 0.32)
-    /// Muted warm orange — decorative/informational accents like the
-    /// "Downloads" link. A different role from `danger` (nothing's wrong),
-    /// so it's its own token, not a red variant.
-    static let orange = Color(red: 0.85, green: 0.55, blue: 0.15)
-    /// QR ink: always dark navy on white, independent of app theme — a QR
-    /// code needs strong fixed contrast to scan, not a light/dark adaptive
-    /// color. Centralized here so it isn't a private literal only QRCodeView
-    /// knows about.
-    static let qrInk = Color(red: 0.09, green: 0.13, blue: 0.34)
+    /// visibility toggle. Kept distinct from `orange`: merging them earlier
+    /// meant the off-state couldn't read as red anymore.
+    static var danger: Color {
+        colorDebug ? Color(red: 0.60, green: 0.30, blue: 0.90) : Color(red: 0.90, green: 0.32, blue: 0.32)
+    }
+    /// Real value is just `accent` — plain-text action buttons (Change…,
+    /// Forget, Clear, Done, Decline) and the "Downloads" link don't need
+    /// their own hue outside debug mode. It still gets its own debug color
+    /// so those call sites are visibly distinct from ones using `accent`
+    /// directly, even though they render identically normally.
+    static var orange: Color {
+        colorDebug ? Color(red: 0.55, green: 0.60, blue: 0.68) : accent
+    }
+    /// QR ink: always dark navy on white outside debug mode — a QR code
+    /// needs strong fixed contrast to scan, not a light/dark adaptive color.
+    static var qrInk: Color {
+        colorDebug ? Color(red: 0.45, green: 0.08, blue: 0.20) : Color(red: 0.09, green: 0.13, blue: 0.34)
+    }
 
     // MARK: Text color tokens
     // The typography styles below and a handful of one-off "matches style X"
     // spots (PinBadge, badge numbers, the transfer percentage) both read
     // from these — not a hand-copied value that only looks the same. Change
     // one of these and every consumer moves together.
-    static let textProminent: Color = .primary     // section/card/body text
-    static let textMuted: Color = .secondary       // subtext, badge numbers, percentages
-    static let textWindowHeader = Color.primary.opacity(0.9)
+    static var textProminent: Color {
+        colorDebug ? Color(red: 0.70, green: 0.90, blue: 0.20) : .primary
+    }
+    static var textMuted: Color {
+        colorDebug ? Color(red: 0.95, green: 0.55, blue: 0.40) : .secondary
+    }
+    static var textWindowHeader: Color {
+        colorDebug ? Color(red: 0.30, green: 0.70, blue: 0.95) : Color.primary.opacity(0.9)
+    }
 
-    /// Blue lift over the material for panels/cards — enough to feel
-    /// intentional, well short of the wash that used to drown out the accent
-    /// color. Cards also use a heavier material than the window (see
-    /// `glassSurface`), which does the structural half of separating a card
-    /// from the window behind it; color does the rest.
-    static let panelTint = dynamic(
-        dark: NSColor(srgbRed: 0.14, green: 0.26, blue: 0.46, alpha: 0.22),
-        light: NSColor(srgbRed: 0.55, green: 0.72, blue: 0.95, alpha: 0.28))
+    /// Blue lift over the material for panels/cards — a wash, not the
+    /// panel's opacity source. That alpha got pushed way up (0.55/0.60)
+    /// specifically to compensate for `.glassEffect()`'s low native
+    /// opacity; now that cards use `.thickMaterial` (which already
+    /// supplies real structural opacity) plus this tint on top, the same
+    /// high alpha reads as over-saturated. Back to a restrained wash.
+    /// Debug mode inverts the hue (orange instead of blue), pushed further
+    /// still, deliberately unmissable.
+    static var panelTint: Color {
+        if colorDebug {
+            return dynamic(
+                dark: NSColor(srgbRed: 0.85, green: 0.45, blue: 0.05, alpha: 0.55),
+                light: NSColor(srgbRed: 0.98, green: 0.65, blue: 0.20, alpha: 0.55))
+        }
+        return dynamic(
+            dark: NSColor(srgbRed: 0.14, green: 0.26, blue: 0.46, alpha: 0.22),
+            light: NSColor(srgbRed: 0.55, green: 0.72, blue: 0.95, alpha: 0.28))
+    }
 
     /// Fainter version of the same wash for the whole window.
-    static let windowTint = dynamic(
-        dark: NSColor(srgbRed: 0.09, green: 0.16, blue: 0.30, alpha: 0.18),
-        light: NSColor(srgbRed: 0.65, green: 0.78, blue: 0.95, alpha: 0.14))
+    static var windowTint: Color {
+        if colorDebug {
+            return dynamic(
+                dark: NSColor(srgbRed: 0.75, green: 0.35, blue: 0.02, alpha: 0.42),
+                light: NSColor(srgbRed: 0.98, green: 0.70, blue: 0.30, alpha: 0.35))
+        }
+        return dynamic(
+            dark: NSColor(srgbRed: 0.09, green: 0.16, blue: 0.30, alpha: 0.18),
+            light: NSColor(srgbRed: 0.65, green: 0.78, blue: 0.95, alpha: 0.14))
+    }
 
-    /// Hairline border for panels.
-    static let hairline = dynamic(
-        dark: NSColor(white: 1, alpha: 0.16),
-        light: NSColor(white: 0, alpha: 0.12))
+    /// Every drawn edge in the app: card borders and in-panel dividers alike.
+    ///
+    /// One token on purpose. Now that surfaces are thin enough to see the
+    /// desktop through, edges — not opacity — are what separate things, so
+    /// this carries more weight than the old faint hairline did. Card edges
+    /// and row dividers may well want to diverge eventually; that's a split
+    /// to make once there's a reason, not up front on a guess.
+    static var hairline: Color {
+        if colorDebug {
+            return dynamic(
+                dark: NSColor(srgbRed: 0.75, green: 0.55, blue: 0.95, alpha: 0.35),
+                light: NSColor(srgbRed: 0.55, green: 0.30, blue: 0.85, alpha: 0.30))
+        }
+        return dynamic(
+            dark: NSColor(white: 1, alpha: 0.34),
+            light: NSColor(white: 0, alpha: 0.24))
+    }
 
     private static func dynamic(dark: NSColor, light: NSColor) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
@@ -192,6 +259,9 @@ struct GlassScrollbar: View {
                     .frame(width: 3, height: trackH)
 
                 Capsule(style: .continuous)
+                    // Standard material, not `.glassEffect()`: a scrollbar
+                    // thumb is content-layer chrome, not navigation — see
+                    // `glassSurface()`'s note on the same distinction.
                     .fill(.regularMaterial)
                     .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.4), lineWidth: 0.5))
                     .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
@@ -241,17 +311,68 @@ struct ScrollerHider: NSViewRepresentable {
 }
 
 extension View {
-    /// Tinted glass + hairline border in a continuous rounded rect. Cards use
-    /// a heavier material than the window (`.thickMaterial` vs. the window's
-    /// `.regularMaterial`) — that weight difference, plus `Theme.panelTint`'s
-    /// blue wash, is what makes a card read as its own surface instead of
-    /// blending into the background.
+    /// A tinted-glass-*looking* panel — standard material, not real
+    /// `.glassEffect()`. Per Apple's own guidance (Materials, HIG): "Don't
+    /// use Liquid Glass in the content layer... Instead, use standard
+    /// materials for elements in the content layer, such as app
+    /// backgrounds." A card is content-layer grouping, not navigation —
+    /// real Liquid Glass is reserved for the functional layer that floats
+    /// above content (the mode-toggle pill, buttons), which is where this
+    /// app still uses it.
+    ///
+    /// No material of its own — deliberately. A card sits on the window,
+    /// which already supplies `.ultraThinMaterial`, so giving the card one
+    /// too meant looking through two stacked materials and two tint washes.
+    /// Materials compound: two "ultra thin" layers are nowhere near thin, and
+    /// that — not the thickness setting — is why the wallpaper used to stop
+    /// dead at the card edge. One material for the whole window, and the card
+    /// separates itself with tint and a drawn border instead of by hiding
+    /// what's behind it.
     func glassSurface(radius: CGFloat = Theme.Radius.card) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return self
+            .background { shape.fill(Theme.panelTint) }
+            .overlay { shape.strokeBorder(Theme.hairline, lineWidth: 1) }
+    }
+
+    /// The window-level analog of `glassSurface()` — real, genuinely
+    /// see-through glass behind a window's whole root content.
+    ///
+    /// `.glassEffect()` turned out to be the wrong tool for the
+    /// transparency itself: it's a view-level effect meant for floating
+    /// controls, not hooked into the window compositor, so on its own it
+    /// rendered as flat opaque white — zero desktop showing through. Real
+    /// see-through vibrancy is a window property:
+    /// `.containerBackground(_:for:.window)` is what actually marks the
+    /// NSWindow non-opaque and blends it with what's behind the window
+    /// itself. `.ultraThinMaterial`, not `.regularMaterial`: the thinnest
+    /// system material, so wallpaper/desktop color genuinely shows through.
+    ///
+    /// The theme's own blue wash sits on top of that as a separate layer —
+    /// `containerBackground` only accepts a plain `ShapeStyle`, and a
+    /// `Material` can't be tinted through that API, so the tint has to be
+    /// its own view. Sizing this correctly was the earlier seam bug's root
+    /// cause, not "two layers" per se: `.background` proposes its content
+    /// the *foreground's* own bounds, so an un-oversized tint would stop
+    /// short of the top whenever content is shorter than the window. Now
+    /// that the window's height genuinely tracks content (no forced
+    /// minHeight, tabs stay a fixed height via RootView's top-aligned
+    /// ZStack), the oversized-rectangle-clipped-by-the-real-window-edges
+    /// trick lines up with `containerBackground` cleanly, no seam.
+    /// One implementation, not a `#if DEBUG` variant: a debug-only override
+    /// here meant debug and release rendered differently — and since the
+    /// override's tint was a fixed color while `Theme.windowTint` is
+    /// light/dark adaptive, Light mode diverged completely. Tuning against a
+    /// build that doesn't look like the shipping one is worse than not
+    /// tuning at all.
+    func glassWindowBackground() -> some View {
+        self
             .background {
-                shape.fill(.thickMaterial).overlay(shape.fill(Theme.panelTint))
+                Rectangle().fill(Theme.windowTint)
+                    .frame(width: 4000, height: 4000)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
-            .overlay(shape.strokeBorder(Theme.hairline, lineWidth: 0.5))
+            .containerBackground(.ultraThinMaterial, for: .window)
     }
 }

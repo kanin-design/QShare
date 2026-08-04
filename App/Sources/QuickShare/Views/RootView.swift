@@ -6,62 +6,52 @@ import AppKit
 /// surface regardless of the active tab.
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
-    /// Height of the fixed controls, measured rather than assumed.
-    @State private var controlsHeight: CGFloat = 0
-
-    /// Room left for the transfers panel: the window minus the controls and the
-    /// padding around the panel, with a floor so it stays usable when the window
-    /// is dragged very short.
-    private func transfersMaxHeight(in windowHeight: CGFloat) -> CGFloat {
-        let verticalPadding = Theme.Space.lg * 2
-        return max(120, windowHeight - controlsHeight - verticalPadding)
-    }
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-                // Fixed controls (header, mode switch, send/receive), measured so
-                // the transfers panel below knows how much room is genuinely left.
-                VStack(spacing: 0) {
-                    header
-                    modePicker
-                        .padding(.horizontal, Theme.Space.lg)
-                        .padding(.top, Theme.Space.lg)
-                        .padding(.bottom, Theme.Space.lg)
+        VStack(spacing: 0) {
+            header
+            modePicker
+                .padding(.horizontal, Theme.Space.lg)
+                .padding(.top, Theme.Space.lg)
+                .padding(.bottom, Theme.Space.lg)
 
-                    Group {
-                        switch model.mode {
-                        case .send:    SendView()
-                        case .receive: ReceiveView()
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.2), value: model.mode)
-                    .padding(.horizontal, Theme.Space.lg)
-                }
-                .background(GeometryReader { g in
-                    Color.clear.preference(key: ControlsHeightKey.self, value: g.size.height)
-                })
-
-                // …then the transfers history wraps its rows, growing only until
-                // it would run out of window, at which point it scrolls.
-                if !model.transfers.isEmpty {
-                    TransfersList(transfers: model.transfers,
-                                  onClear: { model.clearFinishedTransfers() },
-                                  onCancel: { model.cancel($0) },
-                                  maxHeight: transfersMaxHeight(in: geo.size.height))
-                        .padding(.horizontal, Theme.Space.lg)
-                        .padding(.top, Theme.Space.lg)
-                        .padding(.bottom, Theme.Space.lg)
-                }
-
-                Spacer(minLength: 0)
+            // Both tabs stay mounted (only the active one is visible/
+            // hit-testable) so the ZStack's natural height is the taller of
+            // the two, fixed regardless of which tab is showing — a plain
+            // switch between them let the window's height track whichever
+            // tab happened to be active, resizing the window on every Send/
+            // Receive tap. Tabs shouldn't do that.
+            ZStack(alignment: .top) {
+                SendView()
+                    .opacity(model.mode == .send ? 1 : 0)
+                    .allowsHitTesting(model.mode == .send)
+                    .accessibilityHidden(model.mode != .send)
+                ReceiveView()
+                    .opacity(model.mode == .receive ? 1 : 0)
+                    .allowsHitTesting(model.mode == .receive)
+                    .accessibilityHidden(model.mode != .receive)
             }
-            .onPreferenceChange(ControlsHeightKey.self) { controlsHeight = $0 }
+            .animation(.easeInOut(duration: 0.2), value: model.mode)
+            .padding(.horizontal, Theme.Space.lg)
+
+            // The transfers history, capped to a fixed height and internally
+            // scrollable past that — not sized from "whatever's left in the
+            // window," which required a root-level GeometryReader that in
+            // turn made the window's ideal size ill-defined and left it
+            // pinned at `defaultSize` (700pt) even with next to no content,
+            // a dead glass slab below a mostly-empty Send tab.
+            if !model.transfers.isEmpty {
+                TransfersList(transfers: model.transfers,
+                              onClear: { model.clearFinishedTransfers() },
+                              onCancel: { model.cancel($0) })
+                    .padding(.horizontal, Theme.Space.lg)
+                    .padding(.top, Theme.Space.lg)
+                    .padding(.bottom, Theme.Space.lg)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
-        .background(Theme.windowTint)               // faint blue wash over the material
-        .containerBackground(.regularMaterial, for: .window)
+        .glassWindowBackground()
         .tint(Theme.accent)
         .preferredColorScheme(model.effectiveColorScheme)
         .focusEffectDisabled()          // mouse-only app — no keyboard focus rings

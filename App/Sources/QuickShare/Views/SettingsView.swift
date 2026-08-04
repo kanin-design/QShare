@@ -40,8 +40,7 @@ struct SettingsView: View {
         }
         .frame(width: 400)
         .ignoresSafeArea(.container, edges: .top)   // let the title sit on the traffic-light row
-        .background(Theme.windowTint)
-        .containerBackground(.regularMaterial, for: .window)
+        .glassWindowBackground()
         .tint(Theme.accent)
         .preferredColorScheme(model.effectiveColorScheme)
         .focusEffectDisabled()
@@ -76,6 +75,7 @@ struct SettingsView: View {
                         .primaryStyle().lineLimit(1).truncationMode(.middle)
                     Spacer()
                     Button("Change…", action: chooseFolder)
+                        .buttonStyle(.glass)
                         // .tint alone only recolors a bordered button's label
                         // in dark appearance — light mode keeps black text
                         // regardless, so the label color needs setting directly too.
@@ -156,6 +156,7 @@ struct SettingsView: View {
                         accessibilityLabel: "Auto-accept from \(device.name)"
                     ) {
                         Button("Forget") { model.forget(device.name) }
+                            .buttonStyle(.glass)
                             .controlSize(.small)
                             .tint(Theme.orange)
                             .foregroundStyle(Theme.orange)
