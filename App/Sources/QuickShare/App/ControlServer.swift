@@ -14,9 +14,16 @@ import Security
 @MainActor
 final class ControlServer {
     nonisolated static let port: UInt16 = 47821
-    /// Gates the /debug/* routes to QS_MOCK runs only — the same switch that
-    /// enables the mock engine — so they're never reachable in a real build.
+    /// Gates the /debug/* routes. Two independent conditions, not one:
+    /// `#if DEBUG` means a release build can never compile this `true` no
+    /// matter what's in the environment when it's launched — the QS_MOCK
+    /// check alone was a *runtime* gate, so a shipped release binary
+    /// launched with `QS_MOCK=1` set would still have exposed them.
+    #if DEBUG
     nonisolated static let debugEndpointsEnabled = ProcessInfo.processInfo.environment["QS_MOCK"] != nil
+    #else
+    nonisolated static let debugEndpointsEnabled = false
+    #endif
     private var listener: NWListener?
     private unowned let model: AppModel
     let token: String
@@ -186,7 +193,15 @@ final class ControlServer {
         let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/qshare")
         let file = dir.appendingPathComponent("token")
         if let existing = try? String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
-           existing.count >= 32 { return existing }
+           existing.count >= 32 {
+            // Re-assert the mode every load, not only on create. This token is
+            // the whole access control on an API whose /send can read any file
+            // this user can and push it to a nearby device — so a file left
+            // group/world-readable by an older build, a restored backup or a
+            // synced home directory hands that to any other local account.
+            restrictPermissions(directory: dir, file: file)
+            return existing
+        }
         // 256-bit token from the system CSPRNG.
         var bytes = [UInt8](repeating: 0, count: 32)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
@@ -194,8 +209,14 @@ final class ControlServer {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                  attributes: [.posixPermissions: 0o700])
         try? token.write(to: file, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        restrictPermissions(directory: dir, file: file)
         return token
+    }
+
+    /// Owner-only, for both the token and the directory holding it.
+    private static func restrictPermissions(directory: URL, file: URL) {
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
 }
 

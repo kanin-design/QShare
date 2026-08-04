@@ -9,6 +9,15 @@ import CryptoKit
 /// calling `respond(accept:)`.
 public actor InboundSession {
 
+    /// Most files one offer may contain. Generous next to any real Quick Share
+    /// transfer, small enough that the per-file work done before consent stays
+    /// trivial.
+    static let maxFilesPerTransfer = 1024
+    /// Largest size a peer may *declare* for one file (1 TiB). Far beyond a
+    /// real transfer, and far enough below `Int64.max` that summing
+    /// `maxFilesPerTransfer` of them cannot overflow.
+    static let maxFileBytes: Int64 = 1 << 40
+
     public let id: String
     private let channel: FrameChannel
     private let receiveDirectory: URL
@@ -247,6 +256,14 @@ public actor InboundSession {
             try await secure.sendSetupFrame(.response(.unsupportedAttachmentType))
             throw QuickShareError.rejected(.unsupportedType)
         }
+        // The peer chooses this count, and every entry costs a filesystem probe
+        // below — before the user has agreed to anything — plus an open file
+        // handle for the length of the transfer. Bound it rather than letting a
+        // 5 MB introduction frame turn into ~100k of each.
+        guard introduction.fileMetadata.count <= Self.maxFilesPerTransfer else {
+            try await secure.sendSetupFrame(.response(.unsupportedAttachmentType))
+            throw QuickShareError.protocolViolation("too many files in one transfer")
+        }
 
         // Resolve destinations before asking, so a bad name is refused up front.
         var files: [IncomingFile] = []
@@ -256,8 +273,12 @@ public actor InboundSession {
                 throw QuickShareError.missingField("fileMetadata.payloadID")
             }
             let size = meta.size ?? 0
-            guard size >= 0 else {
-                throw QuickShareError.protocolViolation("negative file size")
+            // Upper bound as well as lower: these are summed to show the offer,
+            // and an unbounded value overflows that sum. Sanity-checking the
+            // declaration costs nothing — the real byte count is enforced
+            // separately, per chunk, in `writeChunk`.
+            guard size >= 0, size <= Self.maxFileBytes else {
+                throw QuickShareError.protocolViolation("declared file size out of range")
             }
             let safeName = ReceivedFileName.sanitize(meta.name ?? "")
             let destination = try ReceivedFileName.uniqueDestination(

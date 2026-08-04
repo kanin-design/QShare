@@ -187,4 +187,31 @@ final class WireRobustnessTests: XCTestCase {
             }
         }
     }
+
+    // MARK: Declared sizes
+
+    /// Summing peer-declared file sizes must saturate, not trap.
+    ///
+    /// This is read to present the offer — before the user has accepted
+    /// anything — so a trap here is a remote peer killing the process without
+    /// any interaction at all. Two files of `Int64.max` used to do it.
+    func testOfferTotalSaturatesInsteadOfOverflowing() {
+        let huge = (0..<2).map {
+            IncomingFile(name: "f\($0)", size: .max, mimeType: "application/octet-stream",
+                         payloadID: Int64($0))
+        }
+        let offer = IncomingOffer(id: "x",
+                                  device: QuickShareDevice(id: "d", name: "d", type: .phone),
+                                  files: huge, textTitle: nil, pinCode: "0000")
+        XCTAssertEqual(offer.totalBytes, .max)
+    }
+
+    /// The declared-size bound has to leave enough headroom that a full-sized
+    /// offer cannot overflow the sum in the first place.
+    func testDeclaredSizeBoundsCannotOverflow() {
+        let (product, overflowed) = InboundSession.maxFileBytes
+            .multipliedReportingOverflow(by: Int64(InboundSession.maxFilesPerTransfer))
+        XCTAssertFalse(overflowed)
+        XCTAssertLessThan(product, Int64.max / 2)
+    }
 }

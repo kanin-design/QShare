@@ -8,7 +8,8 @@ import Foundation
 enum DemoData {
 
     static func transfers() -> [ActiveTransfer] {
-        let dl = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let dl = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Downloads")
         func file(_ n: String) -> TransferFile { TransferFile(name: n, url: dl.appendingPathComponent(n)) }
 
         let devices = ["Pixel 8 Pro", "Galaxy S24", "Galaxy Tab S9"]

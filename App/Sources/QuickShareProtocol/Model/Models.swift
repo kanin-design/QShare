@@ -49,7 +49,19 @@ public struct IncomingOffer: Sendable, Equatable {
     /// The verification code, for the user to compare against the other screen.
     public let pinCode: String
 
-    public var totalBytes: Int64 { files.reduce(0) { $0 + $1.size } }
+    /// Saturating, not trapping. Sizes here are declared by a remote peer and
+    /// this is read while presenting the offer — i.e. before anyone has
+    /// consented to anything. A plain `+` traps on overflow, so two files each
+    /// declaring `Int64.max` were enough to kill the process from the network.
+    /// `InboundSession` bounds the values long before they reach this, but a
+    /// public property on a public type shouldn't be one caller away from a
+    /// crash either way.
+    public var totalBytes: Int64 {
+        files.reduce(Int64(0)) { sum, file in
+            let (total, overflowed) = sum.addingReportingOverflow(file.size)
+            return overflowed ? Int64.max : total
+        }
+    }
 
     public init(id: String, device: QuickShareDevice, files: [IncomingFile],
                 textTitle: String?, pinCode: String) {
