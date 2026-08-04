@@ -22,7 +22,7 @@ struct DropZoneView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Space.xl)
-        .glassSurface()
+        .cardSurface()
         .overlay(
             RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))

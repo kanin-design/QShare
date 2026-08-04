@@ -304,6 +304,6 @@ struct PinBadge: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Space.md)
-        .glassSurface(radius: Theme.Radius.control)
+        .cardSurface(radius: Theme.Radius.control)
     }
 }

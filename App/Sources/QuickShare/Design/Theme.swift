@@ -60,11 +60,11 @@ enum Theme {
     static let textMuted: Color = .secondary       // subtext, badge numbers, percentages
     static let textWindowHeader = Color.primary.opacity(0.9)
 
-    /// Blue lift over the material for panels/cards — enough to feel
+    /// Blue lift over the window's material for cards — enough to feel
     /// intentional, well short of the wash that used to drown out the accent
-    /// color. Cards also use a heavier material than the window (see
-    /// `glassSurface`), which does the structural half of separating a card
-    /// from the window behind it; color does the rest.
+    /// color. Since cards stopped carrying a material of their own (see
+    /// `cardSurface`), this is what does most of the work of separating a card
+    /// from the window behind it; `cardBorder` only closes the shape.
     static let panelTint = dynamic(
         dark: NSColor(srgbRed: 0.14, green: 0.26, blue: 0.46, alpha: 0.22),
         light: NSColor(srgbRed: 0.55, green: 0.72, blue: 0.95, alpha: 0.28))
@@ -216,7 +216,7 @@ struct Card<Content: View>: View {
                               container: geo.containerSize.height)
             } action: { _, new in metrics = new }
             .frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: .leading)
-            .glassSurface()
+            .cardSurface()
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
             .overlay(alignment: .trailing) {
                 if isScrolling {
@@ -232,7 +232,7 @@ struct Card<Content: View>: View {
             content
                 .padding(padding)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glassSurface()
+                .cardSurface()
         }
     }
 }
@@ -354,7 +354,7 @@ extension View {
     /// the card edge while showing through everywhere around it. One material
     /// for the whole window; a card separates itself with `panelTint` and a
     /// drawn border rather than by hiding what is behind it.
-    func glassSurface(radius: CGFloat = Theme.Radius.card) -> some View {
+    func cardSurface(radius: CGFloat = Theme.Radius.card) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return self
             .background { shape.fill(Theme.panelTint) }

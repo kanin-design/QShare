@@ -70,7 +70,7 @@ struct SendView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Space.xl)
-        .glassSurface()
+        .cardSurface()
     }
 
     // MARK: Staging (shared by device-send and QR-send)
