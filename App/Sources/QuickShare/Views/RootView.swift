@@ -15,12 +15,12 @@ struct RootView: View {
                 .padding(.top, Theme.Space.lg)
                 .padding(.bottom, Theme.Space.lg)
 
-            // Both tabs stay mounted (only the active one is visible/
-            // hit-testable) so the ZStack's natural height is the taller of
-            // the two, fixed regardless of which tab is showing — a plain
-            // switch between them let the window's height track whichever
-            // tab happened to be active, resizing the window on every Send/
-            // Receive tap. Tabs shouldn't do that.
+            // Both tabs stay mounted, only the active one visible and
+            // hit-testable, so the stack's height is the taller of the two and
+            // doesn't change with the selection. Switching between them used
+            // to resize the whole window — tabs shouldn't do that. `.top`
+            // matters: a ZStack centres by default, which would float the
+            // shorter tab in the middle of the taller one's height.
             ZStack(alignment: .top) {
                 SendView()
                     .opacity(model.mode == .send ? 1 : 0)
@@ -34,12 +34,10 @@ struct RootView: View {
             .animation(.easeInOut(duration: 0.2), value: model.mode)
             .padding(.horizontal, Theme.Space.lg)
 
-            // The transfers history, capped to a fixed height and internally
-            // scrollable past that — not sized from "whatever's left in the
-            // window," which required a root-level GeometryReader that in
-            // turn made the window's ideal size ill-defined and left it
-            // pinned at `defaultSize` (700pt) even with next to no content,
-            // a dead glass slab below a mostly-empty Send tab.
+            // The transfers history caps itself and scrolls past that, rather
+            // than being sized from "whatever is left in the window" — that
+            // needed a root GeometryReader, which left the window's ideal
+            // height undefined and defeated `.windowResizability(.contentSize)`.
             if !model.transfers.isEmpty {
                 TransfersList(transfers: model.transfers,
                               onClear: { model.clearFinishedTransfers() },
@@ -49,12 +47,11 @@ struct RootView: View {
                     .padding(.bottom, Theme.Space.lg)
             }
         }
+        // No `maxHeight: .infinity`: that stretches the content to the window
+        // instead of letting the window take its height from the content.
         .frame(maxWidth: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
-        .glassWindowBackground()
-        .tint(Theme.accent)
-        .preferredColorScheme(model.effectiveColorScheme)
-        .focusEffectDisabled()          // mouse-only app — no keyboard focus rings
+        .windowChrome(model.effectiveColorScheme)
         .animation(.easeInOut(duration: 0.2), value: model.connection)
         // ⌘⌥I — which build am I running? Driven by the menu command so the
         // shortcut works wherever focus happens to be.
@@ -85,13 +82,7 @@ struct RootView: View {
             })
     }
 
-    // Slim title on the traffic-light row: 100% centered, vertically aligned with
-    // the traffic-light buttons (28pt band), no divider.
-    private var header: some View {
-        Text("QShare")
-            .windowHeaderStyle()
-            .frame(maxWidth: .infinity, minHeight: 28)
-    }
+    private var header: some View { WindowHeader(title: "QShare") }
 
     private var modePicker: some View {
         ModeToggle(selection: $model.mode)

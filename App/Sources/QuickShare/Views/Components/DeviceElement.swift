@@ -21,11 +21,9 @@ struct DeviceElement: View {
             tint: dropTargeted ? Theme.accent.opacity(0.14) : nil,
             action: action,
             trailing: {
-                AnyView(
-                    Image(systemName: dropTargeted ? "arrow.down.circle.fill" : "chevron.right")
-                        .font(.system(size: dropTargeted ? 14 : 11, weight: .semibold))
-                        .foregroundStyle(dropTargeted ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.tertiary))
-                )
+                Image(systemName: dropTargeted ? "arrow.down.circle.fill" : "chevron.right")
+                    .font(.system(size: dropTargeted ? 14 : 11, weight: .semibold))
+                    .foregroundStyle(dropTargeted ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.tertiary))
             }
         )
         .accessibilityLabel("Send to \(device.name), \(device.type.rawValue)")

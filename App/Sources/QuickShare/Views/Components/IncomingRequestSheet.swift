@@ -43,7 +43,7 @@ struct IncomingRequestSheet: View {
                 title: "Always accept from this device",
                 subtitle: "Skip this prompt next time.",
                 isOn: $alwaysAccept,
-                size: .compact,
+                density: .compact,
                 accessibilityLabel: "Always accept from \(request.device.name)")
             .padding(.horizontal, 2)
 
@@ -52,11 +52,8 @@ struct IncomingRequestSheet: View {
                     .buttonStyle(.glass)
                     .controlSize(.large)
                     .keyboardShortcut(.cancelAction)
-                    // Without an explicit tint, `.glass` inherits the sheet's
-                    // ambient `.tint(Theme.accent)` and fills solid blue —
-                    // indistinguishable from Accept. Force it back to a
-                    // neutral secondary action instead.
-                    .tint(.secondary)
+                    .tint(Theme.orange)
+                    .foregroundStyle(Theme.orange)
 
                 // Deliberately NOT `.defaultAction`: this sheet appears
                 // unprompted and activates the app, so binding Accept to Return
@@ -70,9 +67,6 @@ struct IncomingRequestSheet: View {
         }
         .padding(Theme.Space.xl)
         .frame(width: 290)
-        .glassWindowBackground()
-        .tint(Theme.accent)
-        .preferredColorScheme(model.effectiveColorScheme)
-        .focusEffectDisabled()
+        .windowChrome(model.effectiveColorScheme)
     }
 }

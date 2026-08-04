@@ -8,25 +8,20 @@ struct TransfersList: View {
     let transfers: [ActiveTransfer]
     let onClear: () -> Void
     let onCancel: (ActiveTransfer) -> Void
-    /// Ceiling from the parent, measured from what's actually left in the
-    /// window. The panel fills up to this, then scrolls.
+    /// A fixed ceiling rather than one measured from the window. Deriving it
+    /// from the space left over needed a root `GeometryReader`, which left the
+    /// window without a defined ideal height and so defeated
+    /// `.windowResizability(.contentSize)` entirely.
     var maxHeight: CGFloat = 360
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
-            SectionHeader(title: "Transfers", trailing: AnyView(
+            SectionHeader(title: "Transfers") {
                 Button("Clear", action: onClear)
-                    // `.glass` (not `.glassProminent`) resolves its own label
-                    // contrast from whatever's behind it — reliable on a
-                    // Card's glassSurface, but this sits directly on the
-                    // plain window background, where in Light mode a
-                    // `.glass` + tint came out nearly invisible. `.glassProminent`
-                    // always renders a solid, guaranteed-legible fill.
-                    .buttonStyle(.glassProminent)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
                     .font(.system(size: 11))
-                    .tint(Theme.orange)
-            ))
+                    .foregroundStyle(Theme.orange)
+            }
 
             Card(padding: Theme.Space.xs, maxHeight: maxHeight) {
                 ElementList(items: transfers) { t in

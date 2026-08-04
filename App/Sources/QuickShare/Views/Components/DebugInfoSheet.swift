@@ -49,22 +49,15 @@ struct DebugInfoSheet: View {
             }
 
             Button("Done", action: onClose)
-                // Not on a Card's glassSurface — plain `.glass` came out
-                // low-contrast in Light mode here (see TransfersList's Clear
-                // button). `.glassProminent` guarantees a legible solid fill.
-                .buttonStyle(.glassProminent)
-                .controlSize(.small)
+                .buttonStyle(.plain)
                 .font(.system(size: 11, weight: .semibold))
-                .tint(Theme.orange)
+                .foregroundStyle(Theme.orange)
                 .keyboardShortcut(.cancelAction)
         }
         .multilineTextAlignment(.center)
         .padding(Theme.Space.xl)
         .frame(width: 260)
-        .glassWindowBackground()
-        .tint(Theme.accent)
-        .preferredColorScheme(model.effectiveColorScheme)
-        .focusEffectDisabled()
+        .windowChrome(model.effectiveColorScheme)
     }
 
     private func copy() {

@@ -40,19 +40,10 @@ struct SettingsView: View {
         }
         .frame(width: 400)
         .ignoresSafeArea(.container, edges: .top)   // let the title sit on the traffic-light row
-        .glassWindowBackground()
-        .tint(Theme.accent)
-        .preferredColorScheme(model.effectiveColorScheme)
-        .focusEffectDisabled()
+        .windowChrome(model.effectiveColorScheme)
     }
 
-    // Mirrors RootView's slim title: centered, vertically aligned with the
-    // traffic-light buttons (28pt band), no divider.
-    private var header: some View {
-        Text("Settings")
-            .windowHeaderStyle()
-            .frame(maxWidth: .infinity, minHeight: 28)
-    }
+    private var header: some View { WindowHeader(title: "Settings") }
 
     /// A category label above its card, not a title inside it — the same
     /// grouped-list shape System Settings uses, and the one every other
@@ -148,11 +139,11 @@ struct SettingsView: View {
                 ElementList(items: model.knownDevices) { device in
                     ToggleElement(
                         icon: device.autoAccept ? "checkmark.shield.fill" : "iphone.gen3",
-                        iconColor: device.autoAccept ? Theme.success : .secondary,
+                        iconColor: device.autoAccept ? Theme.trusted : .secondary,
                         title: device.name,
                         isOn: Binding(get: { device.autoAccept },
                                       set: { model.setAutoAccept($0, for: device.name) }),
-                        size: .compact,
+                        density: .compact,
                         accessibilityLabel: "Auto-accept from \(device.name)"
                     ) {
                         Button("Forget") { model.forget(device.name) }

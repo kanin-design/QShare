@@ -58,7 +58,7 @@ struct TransferRow: View {
     /// fills in while transferring, instead of a separate progress bar
     /// competing for space in an already-compact row.
     private var directionBadge: some View {
-        let color = transfer.direction == .incoming ? Theme.success : Theme.accent
+        let color = transfer.direction == .incoming ? Theme.inbound : Theme.outbound
         return ZStack {
             if transfer.phase == .transferring {
                 Circle().stroke(color.opacity(0.2), lineWidth: 2)
