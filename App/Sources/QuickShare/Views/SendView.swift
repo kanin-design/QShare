@@ -5,6 +5,19 @@ import SwiftUI
 struct SendView: View {
     @EnvironmentObject private var model: AppModel
 
+    /// Whether this tab is the one actually on screen.
+    ///
+    /// Both tabs stay mounted so switching between them can't resize the
+    /// window (see `RootView`), and SwiftUI does not stop an indefinite
+    /// animation in a view it isn't drawing. That matters more than it sounds:
+    /// animation in this window is expensive out of proportion to what it
+    /// shows, because the window is a translucent material over the desktop
+    /// and every animated frame re-blurs it. The idle Send tab measured ~7% of
+    /// a core; the same window with nothing animating measures 0.1%. So every
+    /// indefinite animation here is gated on actually being visible. Finite
+    /// ones need no gate — they run once and stop by themselves.
+    private var isActive: Bool { model.mode == .send }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.lg) {
             switch model.connection {
@@ -29,7 +42,12 @@ struct SendView: View {
     private var discoveryList: some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
             SectionHeader(title: "Nearby devices") {
-                ProgressView().controlSize(.small)
+                // The same mark as the empty state, just small — and only when
+                // that one isn't on screen. Two copies of it running at once
+                // would be both redundant and needless work.
+                if isActive, !model.discoveredDevices.isEmpty {
+                    SearchingSymbol(size: CGSize(width: 24, height: 18), isActive: isActive)
+                }
             }
 
             if model.discoveredDevices.isEmpty {
@@ -58,10 +76,7 @@ struct SendView: View {
 
     private var emptyDiscovery: some View {
         VStack(spacing: Theme.Space.sm) {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.system(size: 22))
-                .foregroundStyle(Theme.accent)
-                .symbolEffect(.variableColor.iterative, options: .repeating)
+            SearchingSymbol(isActive: isActive)
             Text("Looking for devices…")
                 .cardTitle()
             Text("Open Quick Share on your Android device and set it to be visible.")
@@ -148,7 +163,7 @@ struct SendView: View {
             }
 
             HStack(spacing: Theme.Space.sm) {
-                ProgressView().controlSize(.small)
+                if isActive { ProgressView().controlSize(.small) }
                 Text("Waiting for a device to scan…").secondaryStyle()
             }
 
@@ -164,7 +179,7 @@ struct SendView: View {
     private func statusCard(text: String, pin: String?) -> some View {
         Card {
             VStack(spacing: Theme.Space.md) {
-                if pin == nil { ProgressView() }
+                if pin == nil, isActive { ProgressView() }
                 Text(text).cardTitle().multilineTextAlignment(.center)
                 if let pin { PinBadge(pin: pin) }
                 Button("Cancel", role: .cancel) { model.cancelSend() }
