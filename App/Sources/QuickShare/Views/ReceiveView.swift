@@ -31,10 +31,11 @@ struct ReceiveView: View {
                     ? AnyShapeStyle(Theme.danger) : AnyShapeStyle(.secondary),
                 isOn: Binding(get: { model.wantsVisible }, set: { model.setVisible($0) }),
                 switchStyle: .glass,
-                // No color override — GlassSwitch's own defaults are exactly
-                // the red/green this one special toggle needs (green =
-                // visible, red = not), unlike every other toggle in the app,
-                // which is a plain native blue switch.
+                // No color override — GlassToggleStyle already defaults to
+                // Theme.switchOn/switchOff, exactly the green/red this one
+                // special toggle needs (green = visible, red = not), unlike
+                // every other toggle in the app, which is a plain native blue
+                // switch.
                 accessibilityLabel: "Visible to nearby devices")
             .animation(.easeInOut(duration: 0.2), value: model.visibilityStatus)
         }

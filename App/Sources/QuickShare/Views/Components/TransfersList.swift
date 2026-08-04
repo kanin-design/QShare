@@ -21,12 +21,12 @@ struct TransfersList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
-            SectionHeader(title: "Transfers", trailing: AnyView(
+            SectionHeader(title: "Transfers") {
                 Button("Clear", action: onClear)
                     .buttonStyle(.plain)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.orange)
-            ))
+            }
 
             Card(padding: Theme.Space.xs, maxHeight: maxHeight) {
                 ElementList(items: transfers) { t in

@@ -9,15 +9,42 @@ enum Theme {
 
     // MARK: Color
     static let accent = Color(red: 0.16, green: 0.51, blue: 0.96)
-    static let success = Color(red: 0.20, green: 0.72, blue: 0.44)
-    /// True red — off states, failures, the "not visible" side of the
-    /// visibility toggle. Kept distinct from `orange` below: merging them
-    /// earlier meant the off-state couldn't read as red anymore.
-    static let danger = Color(red: 0.90, green: 0.32, blue: 0.32)
+
+    // MARK: Status
+    // The system's own red and green rather than hand-mixed sRGB triples, so
+    // they track the user's Increase Contrast and Differentiate Without Color
+    // settings — which a fixed literal cannot. Strictly "this worked" / "this
+    // went wrong"; anything that merely wants to *look* green or red uses a
+    // role token below instead.
+    static let success = Color.green
+    /// Failures, and the "not visible" side of the visibility toggle. Kept
+    /// distinct from `orange` below: merging them earlier meant the off-state
+    /// couldn't read as red anymore.
+    static let danger = Color.red
+
     /// Muted warm orange — decorative/informational accents like the
     /// "Downloads" link. A different role from `danger` (nothing's wrong),
     /// so it's its own token, not a red variant.
     static let orange = Color(red: 0.85, green: 0.55, blue: 0.15)
+
+    // MARK: Roles
+    // These resolve to the same hues as the status pair today, and are
+    // deliberately still separate tokens: an inbound transfer isn't a
+    // "success", a switch being on isn't one either, and neither is a trusted
+    // sender. Sharing `success` between all four meant restyling it would
+    // silently repaint the transfer list, every glass switch and the sender
+    // shield along with the things that actually report success.
+
+    /// Transfer direction, as a pair — inbound green against outbound blue.
+    static let inbound = Color.green
+    static let outbound = accent
+
+    /// The two sides of the custom glass switch.
+    static let switchOn = Color.green
+    static let switchOff = Color.red
+
+    /// A sender the user has chosen to auto-accept.
+    static let trusted = Color.green
     /// QR ink: always dark navy on white, independent of app theme — a QR
     /// code needs strong fixed contrast to scan, not a light/dark adaptive
     /// color. Centralized here so it isn't a private literal only QRCodeView
@@ -72,6 +99,36 @@ enum Theme {
     enum Radius {
         static let card: CGFloat = 10
         static let control: CGFloat = 7
+    }
+
+    // MARK: Density
+    /// How prominent a row is. Service-level rows are `regular`; per-item rows
+    /// inside a list (one device, one known sender) read as subordinate and use
+    /// `compact`. Row height and switch size come from the same case, so a row
+    /// and the control sitting in it can't disagree about which one they are —
+    /// this used to be `GlassSwitch.Size`, which meant rows drawing the *system*
+    /// switch still sized themselves from a type named after the custom one.
+    enum Density {
+        case regular, compact
+
+        var rowMinHeight: CGFloat {
+            switch self {
+            case .regular: return 34
+            case .compact: return 26
+            }
+        }
+        var switchSize: CGSize {
+            switch self {
+            case .regular: return CGSize(width: 34, height: 20)
+            case .compact: return CGSize(width: 26, height: 15)
+            }
+        }
+        var knobInset: CGFloat {
+            switch self {
+            case .regular: return 2
+            case .compact: return 1.5
+            }
+        }
     }
 
 }
@@ -241,6 +298,20 @@ struct ScrollerHider: NSViewRepresentable {
 }
 
 extension View {
+    /// The chrome every top-level surface shares: the window's faint blue wash
+    /// over its material, the app tint, the chosen appearance, and no focus
+    /// rings. All four surfaces (root, settings, and the two sheets) repeated
+    /// these five modifiers by hand — drift in any one of them would only be
+    /// visible with two windows open side by side.
+    func windowChrome(_ colorScheme: ColorScheme) -> some View {
+        self
+            .background(Theme.windowTint)
+            .containerBackground(.regularMaterial, for: .window)
+            .tint(Theme.accent)
+            .preferredColorScheme(colorScheme)
+            .focusEffectDisabled()          // mouse-only app — no keyboard focus rings
+    }
+
     /// Tinted glass + hairline border in a continuous rounded rect. Cards use
     /// a heavier material than the window (`.thickMaterial` vs. the window's
     /// `.regularMaterial`) — that weight difference, plus `Theme.panelTint`'s

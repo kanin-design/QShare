@@ -60,11 +60,7 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea(.container, edges: .top)   // let the wordmark sit on the traffic-light row
-        .background(Theme.windowTint)               // faint blue wash over the material
-        .containerBackground(.regularMaterial, for: .window)
-        .tint(Theme.accent)
-        .preferredColorScheme(model.effectiveColorScheme)
-        .focusEffectDisabled()          // mouse-only app — no keyboard focus rings
+        .windowChrome(model.effectiveColorScheme)
         .animation(.easeInOut(duration: 0.2), value: model.connection)
         // ⌘⌥I — which build am I running? Driven by the menu command so the
         // shortcut works wherever focus happens to be.
@@ -95,13 +91,7 @@ struct RootView: View {
             })
     }
 
-    // Slim title on the traffic-light row: 100% centered, vertically aligned with
-    // the traffic-light buttons (28pt band), no divider.
-    private var header: some View {
-        Text("QShare")
-            .windowHeaderStyle()
-            .frame(maxWidth: .infinity, minHeight: 28)
-    }
+    private var header: some View { WindowHeader(title: "QShare") }
 
     private var modePicker: some View {
         ModeToggle(selection: $model.mode)

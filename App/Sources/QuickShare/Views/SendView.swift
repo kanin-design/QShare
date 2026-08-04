@@ -28,9 +28,9 @@ struct SendView: View {
 
     private var discoveryList: some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
-            SectionHeader(title: "Nearby devices", trailing: AnyView(
+            SectionHeader(title: "Nearby devices") {
                 ProgressView().controlSize(.small)
-            ))
+            }
 
             if model.discoveredDevices.isEmpty {
                 emptyDiscovery
@@ -78,10 +78,10 @@ struct SendView: View {
     private func stagingCard(title: String,
                              @ViewBuilder primary: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
-            SectionHeader(title: title, trailing: AnyView(
+            SectionHeader(title: title) {
                 Button("Back") { model.cancelSend() }
                     .buttonStyle(.bordered).controlSize(.small).tint(.secondary)
-            ))
+            }
 
             DropZoneView { urls in model.stage(urls: urls) }
 

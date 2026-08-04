@@ -57,11 +57,7 @@ struct DebugInfoSheet: View {
         .multilineTextAlignment(.center)
         .padding(Theme.Space.xl)
         .frame(width: 260)
-        .background(Theme.windowTint)
-        .containerBackground(.regularMaterial, for: .window)
-        .tint(Theme.accent)
-        .preferredColorScheme(model.effectiveColorScheme)
-        .focusEffectDisabled()
+        .windowChrome(model.effectiveColorScheme)
     }
 
     private func copy() {

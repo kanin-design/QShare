@@ -1,15 +1,30 @@
 import SwiftUI
 import AppKit
 
-/// Small uppercase section header, optionally with a trailing accessory.
-struct SectionHeader: View {
+/// The slim window title that sits on the traffic-light row. Both windows draw
+/// it identically and only the string differs, so the 28pt band that lines it
+/// up with the traffic lights lives here instead of being restated per window.
+struct WindowHeader: View {
     let title: String
-    var trailing: AnyView? = nil
+    var body: some View {
+        Text(title)
+            .windowHeaderStyle()
+            .frame(maxWidth: .infinity, minHeight: 28)
+    }
+}
+
+/// Small uppercase section header, optionally with a trailing accessory.
+/// Generic over the accessory rather than taking an `AnyView`: the erasure was
+/// costing every caller a wrapper at the call site and buying nothing.
+struct SectionHeader<Trailing: View>: View {
+    let title: String
+    @ViewBuilder var trailing: () -> Trailing
+
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
             Text(title).sectionStyle()
             Spacer()
-            trailing
+            trailing()
         }
         .frame(minHeight: 19)   // fixed height so tabs share identical top geometry
         // Align the header with the card's *content*, not its outer edge — the
@@ -18,48 +33,55 @@ struct SectionHeader: View {
     }
 }
 
-/// A pure-SwiftUI on/off switch. Unlike the AppKit-backed `Toggle` hosted inside
-/// a translucent material (which repaints in layers), this composites in a single
-/// pass so it never flickers.
-struct GlassSwitch: View {
-    @Binding var isOn: Bool
-    /// What this switch controls — the switch is used for several settings now,
-    /// so the label can't be baked in.
-    var label: String
-    /// Per-item switches (one device in a list) read as subordinate to the
-    /// service-level ones, so they're drawn smaller.
-    var size: Size = .regular
-    var onColor: Color = Theme.success
-    var offColor: Color = Theme.danger
-
-    enum Size {
-        case regular, compact
-        var dimensions: CGSize {
-            switch self {
-            case .regular: return CGSize(width: 34, height: 20)
-            case .compact: return CGSize(width: 26, height: 15)
-            }
-        }
-        var knobInset: CGFloat { self == .regular ? 2 : 1.5 }
+extension SectionHeader where Trailing == EmptyView {
+    init(title: String) {
+        self.init(title: title, trailing: { EmptyView() })
     }
+}
 
-    var body: some View {
-        let box = size.dimensions
-        Capsule()
-            .fill(isOn ? AnyShapeStyle(onColor) : AnyShapeStyle(offColor))
-            .frame(width: box.width, height: box.height)
-            .overlay(alignment: isOn ? .trailing : .leading) {
-                Circle()
-                    .fill(.white)
-                    .padding(size.knobInset)
-                    .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
-            }
-            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isOn)
-            .contentShape(Capsule())
-            .onTapGesture { isOn.toggle() }
-            .accessibilityElement()
-            .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-            .accessibilityLabel(label)
+/// A pure-SwiftUI on/off switch. Unlike the AppKit-backed switch hosted inside
+/// a translucent material (which repaints in layers), this composites in a
+/// single pass so it never flickers.
+///
+/// A `ToggleStyle` rather than a standalone view: `Toggle` then supplies the
+/// keyboard activation, button role and accessibility wiring that the old
+/// `.onTapGesture` capsule had to fake by hand — and both switches in the app
+/// become the same `Toggle` with a different style attached.
+struct GlassToggleStyle: ToggleStyle {
+    var density: Theme.Density = .regular
+    var onColor: Color = Theme.switchOn
+    var offColor: Color = Theme.switchOff
+
+    func makeBody(configuration: Configuration) -> some View {
+        let box = density.switchSize
+        return Button {
+            configuration.isOn.toggle()
+        } label: {
+            Capsule()
+                .fill(configuration.isOn ? AnyShapeStyle(onColor) : AnyShapeStyle(offColor))
+                .frame(width: box.width, height: box.height)
+                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                    Circle()
+                        .fill(.white)
+                        .padding(density.knobInset)
+                        .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
+                }
+                .animation(.spring(response: 0.28, dampingFraction: 0.72),
+                           value: configuration.isOn)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(configuration.isOn ? .isSelected : [])
+    }
+}
+
+extension ToggleStyle where Self == GlassToggleStyle {
+    static var glass: GlassToggleStyle { GlassToggleStyle() }
+
+    static func glass(density: Theme.Density,
+                      on: Color = Theme.switchOn,
+                      off: Color = Theme.switchOff) -> GlassToggleStyle {
+        GlassToggleStyle(density: density, onColor: on, offColor: off)
     }
 }
 
@@ -106,17 +128,20 @@ struct ToggleElement<Accessory: View>: View {
     enum SwitchStyle { case system, glass }
 
     var icon: String? = nil
-    var iconColor: Color = Theme.success
+    /// Neutral by default — a row icon carries no status of its own, so the
+    /// one row that means something by it (a trusted sender) says so
+    /// explicitly rather than inheriting a green nothing else wants.
+    var iconColor: Color = .secondary
     let title: String
     var subtitle: String? = nil
     var subtitleColor: AnyShapeStyle = AnyShapeStyle(.secondary)
     @Binding var isOn: Bool
-    var size: GlassSwitch.Size = .regular
+    var density: Theme.Density = .regular
     var switchStyle: SwitchStyle = .system
     /// Glass-only: what on/off mean beyond "enabled" — e.g. red for "not
-    /// trusted" rather than the default green/danger pairing.
-    var glassOnColor: Color = Theme.success
-    var glassOffColor: Color = Theme.danger
+    /// trusted" rather than the default switchOn/switchOff pairing.
+    var glassOnColor: Color = Theme.switchOn
+    var glassOffColor: Color = Theme.switchOff
     /// VoiceOver label, when the visible title alone isn't specific enough
     /// (e.g. it should name a device the title doesn't mention).
     var accessibilityLabel: String? = nil
@@ -138,42 +163,62 @@ struct ToggleElement<Accessory: View>: View {
             }
             Spacer(minLength: Theme.Space.sm)
             accessory()
-            switch switchStyle {
-            case .system:
-                // The system switch has a fixed physical size that assumes
-                // System Settings' larger type; next to our much smaller type
-                // scale it reads oversized, so every row pulls it down to the
-                // same small size rather than varying it by row.
-                Toggle(accessibilityLabel ?? title, isOn: $isOn)
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                    .controlSize(.mini)
-            case .glass:
-                GlassSwitch(isOn: $isOn, label: accessibilityLabel ?? title, size: size,
-                            onColor: glassOnColor, offColor: glassOffColor)
-            }
+            toggle
         }
-        .frame(minHeight: size == .regular ? 34 : 26)
+        .frame(minHeight: density.rowMinHeight)
+    }
+
+    /// Both variants are the same `Toggle` under a different style — the only
+    /// thing that differs is which switch gets drawn. The visible title is
+    /// drawn by the row above, so the label here is purely for VoiceOver.
+    @ViewBuilder private var toggle: some View {
+        switch switchStyle {
+        case .system:
+            // The system switch has a fixed physical size that assumes System
+            // Settings' larger type; next to our much smaller type scale it
+            // reads oversized, so every row pulls it down to the same small
+            // size rather than varying it by row.
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                .accessibilityLabel(accessibilityLabel ?? title)
+        case .glass:
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.glass(density: density, on: glassOnColor, off: glassOffColor))
+                .labelsHidden()
+                .accessibilityLabel(accessibilityLabel ?? title)
+        }
     }
 }
 
 extension ToggleElement where Accessory == EmptyView {
     init(icon: String? = nil,
-         iconColor: Color = Theme.success,
+         iconColor: Color = .secondary,
          title: String,
          subtitle: String? = nil,
          subtitleColor: AnyShapeStyle = AnyShapeStyle(.secondary),
          isOn: Binding<Bool>,
-         size: GlassSwitch.Size = .regular,
+         density: Theme.Density = .regular,
          switchStyle: SwitchStyle = .system,
-         glassOnColor: Color = Theme.success,
-         glassOffColor: Color = Theme.danger,
+         glassOnColor: Color = Theme.switchOn,
+         glassOffColor: Color = Theme.switchOff,
          accessibilityLabel: String? = nil) {
         self.init(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle,
                   subtitleColor: subtitleColor, isOn: isOn,
-                  size: size, switchStyle: switchStyle,
+                  density: density, switchStyle: switchStyle,
                   glassOnColor: glassOnColor, glassOffColor: glassOffColor,
                   accessibilityLabel: accessibilityLabel, accessory: { EmptyView() })
+    }
+}
+
+/// The default trailing affordance on an `ActionElement` — its own type so the
+/// generic form can name it as the default `Trailing`.
+struct ActionChevron: View {
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.tertiary)
     }
 }
 
@@ -182,7 +227,7 @@ extension ToggleElement where Accessory == EmptyView {
 /// every "pick one of these" row — a discovered device, the QR-code
 /// fallback — built once so their insets can't drift the way hand-copied
 /// markup did.
-struct ActionElement: View {
+struct ActionElement<Trailing: View>: View {
     let icon: String
     var iconColor: Color = Theme.accent
     let title: String
@@ -192,8 +237,7 @@ struct ActionElement: View {
     /// highlight. Leave nil for the default hover-only behavior.
     var tint: Color? = nil
     let action: () -> Void
-    /// Replaces the default chevron when set.
-    var trailing: (() -> AnyView)? = nil
+    @ViewBuilder var trailing: () -> Trailing
 
     @State private var hovering = false
 
@@ -211,13 +255,7 @@ struct ActionElement: View {
                     }
                 }
                 Spacer()
-                if let trailing {
-                    trailing()
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                }
+                trailing()
             }
             .padding(.horizontal, Theme.Space.md)
             .padding(.vertical, Theme.Space.sm + 1)
@@ -229,6 +267,20 @@ struct ActionElement: View {
                 .fill(tint ?? (hovering ? Color.primary.opacity(0.06) : Color.clear))
         )
         .onHover { hovering = $0 }
+    }
+}
+
+extension ActionElement where Trailing == ActionChevron {
+    init(icon: String,
+         iconColor: Color = Theme.accent,
+         title: String,
+         subtitle: String? = nil,
+         subtitleColor: AnyShapeStyle = AnyShapeStyle(.secondary),
+         tint: Color? = nil,
+         action: @escaping () -> Void) {
+        self.init(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle,
+                  subtitleColor: subtitleColor, tint: tint, action: action,
+                  trailing: { ActionChevron() })
     }
 }
 

@@ -43,7 +43,7 @@ struct IncomingRequestSheet: View {
                 title: "Always accept from this device",
                 subtitle: "Skip this prompt next time.",
                 isOn: $alwaysAccept,
-                size: .compact,
+                density: .compact,
                 accessibilityLabel: "Always accept from \(request.device.name)")
             .padding(.horizontal, 2)
 
@@ -66,10 +66,6 @@ struct IncomingRequestSheet: View {
         }
         .padding(Theme.Space.xl)
         .frame(width: 290)
-        .background(Theme.windowTint)
-        .containerBackground(.regularMaterial, for: .window)
-        .tint(Theme.accent)
-        .preferredColorScheme(model.effectiveColorScheme)
-        .focusEffectDisabled()
+        .windowChrome(model.effectiveColorScheme)
     }
 }
