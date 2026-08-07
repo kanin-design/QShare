@@ -43,11 +43,23 @@ transfer. It depends on nothing outside the OS.
 ## Requirements
 
 **macOS 26 or later.** The interface uses Apple's Liquid Glass (`glassEffect`),
-which is why `Package.swift` pins `.macOS("26.0")`. Built with Swift 6.3.
+which is why `Package.swift` pins `.macOS("26.0")`. Built with Swift 6.3, in the
+Swift 6 language mode throughout — the transport runs on actors, the app on the
+main actor, and the compiler checks the boundary.
 
 Both devices need to be on the same Wi-Fi network.
 
-## Install
+## Download
+
+Grab the latest **[`QShare-macOS.dmg`](https://github.com/kanin-design/QShare/releases/latest)**,
+open it, and drag QShare to Applications.
+
+The build is ad-hoc signed but **not notarized**, so Gatekeeper blocks it the
+first time. On macOS 15 and later the old right-click → Open trick no longer
+works: open **System Settings → Privacy & Security**, find the notice about
+QShare being blocked, and press **Open Anyway**.
+
+## Build from source
 
 ```bash
 git clone https://github.com/kanin-design/QShare.git
@@ -58,6 +70,9 @@ open build/QShare.app
 
 The packaging step matters: real networking needs a proper `.app` bundle so
 macOS will grant local-network access. A bare `swift run` binary can't get it.
+
+`./Packaging/make-dmg.sh` builds the app and wraps it in a disk image, which is
+how releases are cut.
 
 ## Usage
 
@@ -126,9 +141,9 @@ Some numbers:
 
 | | |
 |---|---|
-| Protocol implementation | ~3,950 lines |
-| App | ~3,500 lines |
-| Tests | ~3,850 lines |
+| Protocol implementation | ~4,000 lines |
+| App | ~4,450 lines |
+| Tests | ~3,880 lines |
 | Third-party dependencies | **0** |
 
 The wire format is hand-written rather than generated — only about 32 of the
@@ -144,7 +159,7 @@ protocol details worth knowing.
 
 ```bash
 cd App
-swift test                              # 155 tests
+swift test                              # 157 tests
 swift test --sanitize=thread            # concurrency
 QS_MOCK=1 swift run QuickShare          # UI work without a phone
 ```
