@@ -4,7 +4,7 @@ import AppKit
 /// Contents of the menu-bar item. Lets you toggle receiving, open the main
 /// window, and quit — so the app is useful without its window in front.
 struct MenuBarView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -42,7 +42,7 @@ struct MenuBarView: View {
         Button("Quit QShare") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
 
-        // Not a menu item — just where a plain ObservableObject (AppModel
+        // Not a menu item — just where the model (which
         // can't call the View-only `openWindow` action itself) reaches a
         // View that can, so an incoming request reopens a closed window
         // instead of only reordering an already-open one.

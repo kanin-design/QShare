@@ -8,7 +8,7 @@ import AppKit
 /// they're the whole hero — big, monospaced, tap to copy. Everything else is
 /// a quiet caption underneath, not a card of equally-weighted rows.
 struct DebugInfoSheet: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
     let onClose: () -> Void
 
     @State private var justCopied = false

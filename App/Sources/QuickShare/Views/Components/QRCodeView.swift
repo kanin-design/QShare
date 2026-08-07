@@ -7,6 +7,11 @@ import CoreImage.CIFilterBuiltins
 /// from CoreImage and drawing it as vectors (so it scales crisply).
 struct QRCodeView: View {
     let payload: String
+
+    /// The card's shape, defined once: the white fill and the border stroke
+    /// have to be the same rounded rect, and as two separate literals they
+    /// could drift apart without anything failing.
+    private static let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
     var size: CGFloat = 200
 
     private static var navy: Color { Theme.qrInk }
@@ -23,10 +28,9 @@ struct QRCodeView: View {
         }
         .frame(width: size, height: size)
         .padding(Theme.Space.lg)
-        .background(.white, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(.white, in: Self.shape)
         .overlay(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(.black.opacity(0.06), lineWidth: 1)
+            Self.shape.strokeBorder(.black.opacity(0.06), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.16), radius: 18, y: 6)
     }

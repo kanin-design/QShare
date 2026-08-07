@@ -3,7 +3,7 @@ import SwiftUI
 /// Send flow: discover nearby devices → pick one → stage files → send.
 /// Or, for a device that isn't listed: stage files → show a QR the device scans.
 struct SendView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
 
     /// Whether this tab is the one actually on screen.
     ///

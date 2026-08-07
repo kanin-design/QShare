@@ -16,7 +16,7 @@ private struct ServiceToggle: Identifiable {
 /// and sized to its content — the window grows and shrinks as cards like
 /// Known Senders appear or their lists change, rather than a fixed height.
 struct SettingsView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         // No explicit height anywhere in this chain: a plain VStack reports
@@ -67,11 +67,7 @@ struct SettingsView: View {
                     Spacer()
                     Button("Change…", action: chooseFolder)
                         .buttonStyle(.glass)
-                        // .tint alone only recolors a bordered button's label
-                        // in dark appearance — light mode keeps black text
-                        // regardless, so the label color needs setting directly too.
-                        .tint(Theme.orange)
-                        .foregroundStyle(Theme.orange)
+                        .orangeAccent()
                 }
                 Text("Received files are saved here.").secondaryStyle()
             }
@@ -149,8 +145,7 @@ struct SettingsView: View {
                         Button("Forget") { model.forget(device.name) }
                             .buttonStyle(.glass)
                             .controlSize(.small)
-                            .tint(Theme.orange)
-                            .foregroundStyle(Theme.orange)
+                            .orangeAccent()
                     }
                 }
             }

@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 import AppKit
 import UserNotifications
 
@@ -41,15 +40,26 @@ enum ConnectionState: Equatable {
 }
 
 /// Single source of truth for the whole app. Views observe this; it consumes
-/// engine callbacks and updates published state.
+/// engine callbacks and updates its state.
+///
+/// `@Observable` rather than `ObservableObject`, and the difference is not
+/// cosmetic here. `ObservableObject` invalidates *every* observing view on any
+/// published change, and every screen in this app observes this model — so a
+/// transfer-progress tick, which fires many times a second, re-evaluated the
+/// whole view tree including Settings. This window is a translucent material
+/// over the desktop, where SwiftUI view-graph re-evaluation is measurably
+/// expensive (see `SearchingSymbol`), so that was the costliest possible
+/// choice. Observation tracks reads per property: only views that actually
+/// read `transfers` re-render when it changes.
 @MainActor
-final class AppModel: ObservableObject {
+@Observable
+final class AppModel {
 
     // Global
-    @Published var mode: AppMode = .send
+    var mode: AppMode = .send
     /// Drives the ⌘⌥I build-info sheet; set from the menu command.
-    @Published var showingBuildInfo = false
-    @Published var deviceName: String = AppModel.defaultDeviceName()
+    var showingBuildInfo = false
+    var deviceName: String = AppModel.defaultDeviceName()
 
     // Receive side
     //
@@ -57,10 +67,10 @@ final class AppModel: ObservableObject {
     // lag. `wantsVisible` is what the user asked for and flips instantly, so the
     // switch feels responsive. `isVisible` is what the engine actually achieved
     // — mDNS published — and drives the status text and indicator.
-    @Published private(set) var wantsVisible: Bool = false
-    @Published private(set) var isVisible: Bool = false
+    private(set) var wantsVisible: Bool = false
+    private(set) var isVisible: Bool = false
     /// Set when advertising was requested but never came up.
-    @Published private(set) var visibilityFailed: Bool = false
+    private(set) var visibilityFailed: Bool = false
 
     /// Notification permission is asked for at most once per launch — see
     /// `notifyAutoAccepted`.
@@ -87,24 +97,24 @@ final class AppModel: ObservableObject {
         case (false, false): return .off
         }
     }
-    @Published var incomingRequest: IncomingRequest? = nil
+    var incomingRequest: IncomingRequest? = nil
     /// Bumped on every incoming request, accepted automatically or not.
     /// `AppModel` can't call `openWindow` itself — that's a View-only
     /// environment action — so this is what a View (`MenuBarView`, always
     /// alive via the menu-bar item) watches to reopen the main window when
     /// it was closed and something just happened that the user should see.
-    @Published private(set) var incomingActivityToken = UUID()
+    private(set) var incomingActivityToken = UUID()
 
     // Send side
-    @Published var discoveredDevices: [RemoteDevice] = []
-    @Published var connection: ConnectionState = .idle
-    @Published var stagedFiles: [FileItem] = []
+    var discoveredDevices: [RemoteDevice] = []
+    var connection: ConnectionState = .idle
+    var stagedFiles: [FileItem] = []
 
     // Both
-    @Published var transfers: [ActiveTransfer] = []
+    var transfers: [ActiveTransfer] = []
 
     /// Recently transferred files, newest first, for the File menu.
-    @Published var recentFiles: [RecentFile] = []
+    var recentFiles: [RecentFile] = []
     private static let maxRecentFiles = 10
 
     /// Senders we've accepted from before, and whether to auto-accept from them.
@@ -119,19 +129,25 @@ final class AppModel: ObservableObject {
     /// network that claims a name you've enabled will be auto-accepted. That's
     /// why auto-accepted transfers still post a notification instead of landing
     /// silently.
-    @Published var knownDevices: [KnownDevice] = []
+    var knownDevices: [KnownDevice] = []
 
     // Settings (persisted)
-    @Published var downloadDirectory: URL = AppModel.defaultDownloadDirectory()
-    @Published var startVisible: Bool = false
-    @Published var appearance: AppAppearance = .system
+    var downloadDirectory: URL = AppModel.defaultDownloadDirectory()
+    var startVisible: Bool = false
+    var appearance: AppAppearance = .system
     /// Live system dark/light, so "System" can resolve to a concrete
     /// ColorScheme rather than nil — `.preferredColorScheme(nil)` doesn't
     /// reliably reset a window that was previously forced to Light or Dark,
     /// so "System" is expressed as "whichever concrete scheme matches right
     /// now" instead of "no override," and this is what keeps that current.
-    @Published private var systemIsDark: Bool = AppModel.currentSystemIsDark()
-    private var systemAppearanceObserver: NSObjectProtocol?
+    private var systemIsDark: Bool = AppModel.currentSystemIsDark()
+    /// The appearance-observer token, held outside actor isolation.
+    ///
+    /// `deinit` is nonisolated and so cannot read main-actor state, which is
+    /// what a plain stored property here would be. A small locked box keeps
+    /// teardown independent of the actor rather than making the property
+    /// `nonisolated(unsafe)`, which would just be a claim rather than a fact.
+    private let appearanceObserver = ObserverBox()
 
     var effectiveColorScheme: ColorScheme {
         switch appearance {
@@ -146,7 +162,7 @@ final class AppModel: ObservableObject {
     }
     /// Localhost control API for the `qshare` CLI. Off by default: it can read
     /// any path the user can and push it to a nearby device, so it's opt-in.
-    @Published var controlAPIEnabled: Bool = false
+    var controlAPIEnabled: Bool = false
 
     private let service: QuickShareService
     private let prefs = Preferences()
@@ -176,12 +192,12 @@ final class AppModel: ObservableObject {
         self.service.startDiscovery()
         if controlAPIEnabled { startControlServer() }
 
-        systemAppearanceObserver = DistributedNotificationCenter.default().addObserver(
+        appearanceObserver.set(DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
             object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.systemIsDark = AppModel.currentSystemIsDark() }
-        }
+        })
 
         if ProcessInfo.processInfo.environment["QS_MOCK"] != nil {
             deviceName = "MacBook Pro"   // neutral name for demo screenshots
@@ -190,7 +206,12 @@ final class AppModel: ObservableObject {
     }
 
     deinit {
-        systemAppearanceObserver.map(DistributedNotificationCenter.default().removeObserver)
+        // `deinit` is nonisolated, so it cannot touch main-actor state. The
+        // token is captured into a nonisolated box when the observer is
+        // registered, precisely so teardown needs nothing from the actor.
+        if let token = appearanceObserver.take() {
+            DistributedNotificationCenter.default().removeObserver(token)
+        }
     }
 
     // MARK: CLI / control API
@@ -273,13 +294,30 @@ final class AppModel: ObservableObject {
     /// permission status — the only reliable way to confirm a notification
     /// really reached the system, rather than screenshotting a banner that's
     /// gone in a few seconds.
-    func debugNotificationStatus(completion: @escaping (_ delivered: [[String: Any]], _ authorization: String) -> Void) {
+    /// A delivered notification, as a concrete `Sendable` value.
+    ///
+    /// This crossed an isolation boundary as `[[String: Any]]`, which Swift 6
+    /// rejects and is right to: `Any` can hold anything, so the compiler cannot
+    /// know the payload is safe to send. Modelling it removes the doubt rather
+    /// than silencing it.
+    struct DeliveredNotification: Sendable {
+        let id: String
+        let title: String
+        let body: String
+
+        var asJSON: [String: String] { ["id": id, "title": title, "body": body] }
+    }
+
+    func debugNotificationStatus(
+        completion: @escaping @MainActor (_ delivered: [DeliveredNotification],
+                                         _ authorization: String) -> Void
+    ) {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
-                let delivered: [[String: Any]] = notifications.map {
-                    ["id": $0.request.identifier,
-                     "title": $0.request.content.title,
-                     "body": $0.request.content.body]
+                let delivered = notifications.map {
+                    DeliveredNotification(id: $0.request.identifier,
+                                          title: $0.request.content.title,
+                                          body: $0.request.content.body)
                 }
                 let authorization: String
                 switch settings.authorizationStatus {
@@ -738,7 +776,7 @@ extension AppModel: QuickShareServiceDelegate {
 
     func serviceDidFinishTransfer(id: String, error: String?) {
         if let i = transfers.firstIndex(where: { $0.id == id && !$0.phase.isTerminal }) {
-            transfers[i].phase = error == nil ? .completed : .failed(error!)
+            transfers[i].phase = error.map { .failed($0) } ?? .completed
             if error == nil {
                 transfers[i].fraction = 1.0
                 recordRecentFiles(from: transfers[i])
@@ -751,5 +789,25 @@ extension AppModel: QuickShareServiceDelegate {
     func serviceDidResolveFiles(id: String, files: [TransferFile]) {
         guard let i = transfers.firstIndex(where: { $0.id == id }) else { return }
         transfers[i].files = files
+    }
+}
+
+
+/// A lock-protected slot for a notification-observer token, so `deinit` can
+/// release it without touching actor-isolated state.
+private final class ObserverBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var token: NSObjectProtocol?
+
+    func set(_ newToken: NSObjectProtocol?) {
+        lock.lock(); defer { lock.unlock() }
+        token = newToken
+    }
+
+    func take() -> NSObjectProtocol? {
+        lock.lock(); defer { lock.unlock() }
+        let existing = token
+        token = nil
+        return existing
     }
 }

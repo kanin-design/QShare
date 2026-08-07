@@ -5,7 +5,7 @@ import AppKit
 /// name in its own Quick Share device picker. The accept/decline prompt is
 /// presented globally from RootView.
 struct ReceiveView: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.lg) {
@@ -80,7 +80,7 @@ struct ReceiveView: View {
     private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: Theme.Space.md) {
             Text("\(n)")
-                .font(.system(size: 9, weight: .semibold))
+                .font(Theme.Font.glyph)
                 // Muted badge number — same color as secondaryStyle's, kept
                 // at its own small size to fit the fixed 16pt circle.
                 .foregroundStyle(Theme.textMuted)

@@ -25,7 +25,11 @@ final class ControlServer {
     nonisolated static let debugEndpointsEnabled = false
     #endif
     private var listener: NWListener?
-    private unowned let model: AppModel
+    /// Weak, not `unowned`. These callbacks arrive from `NWListener`, and
+    /// `unowned` traps on access after deallocation — a crash class bought for
+    /// nothing. The model outlives the server today; this stops that being
+    /// load-bearing.
+    private weak var model: AppModel?
     let token: String
 
     init(model: AppModel) {
@@ -38,7 +42,11 @@ final class ControlServer {
         params.allowLocalEndpointReuse = true
         // Bind the socket to 127.0.0.1 specifically, so the port is not even
         // connectable from other hosts (not just filtered at accept time).
-        params.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .init(rawValue: Self.port)!)
+        // `.any` is unreachable — `port` is a compile-time constant in range —
+        // but a force unwrap here would crash the app at launch if it ever
+        // stopped being, and there is nothing gained by that.
+        let localPort = NWEndpoint.Port(rawValue: Self.port) ?? .any
+        params.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: localPort)
         guard let l = try? NWListener(using: params) else {
             NSLog("QShare control server: could not bind port \(Self.port)")
             return
@@ -120,9 +128,16 @@ final class ControlServer {
         guard auth.hasPrefix("Bearer "), Self.constantTimeEqual(String(auth.dropFirst(7)), token) else {
             respond(Self.json(401, ["error": "unauthorized"])); return
         }
+        // /health answers without the model, so a probe still works if the app
+        // is tearing down; everything else needs it.
+        if case ("GET", "/health") = (req.method, req.path) {
+            respond(Self.json(200, ["ok": true])); return
+        }
+        guard let model else {
+            respond(Self.json(503, ["error": "shutting down"])); return
+        }
+
         switch (req.method, req.path) {
-        case ("GET", "/health"):
-            respond(Self.json(200, ["ok": true]))
         case ("GET", "/devices"):
             respond(Self.json(200, model.devicesForCLI()))
         case ("GET", "/transfers"):
@@ -152,7 +167,8 @@ final class ControlServer {
             respond(Self.json(200, ["ok": true]))
         case ("GET", "/debug/notifications") where Self.debugEndpointsEnabled:
             model.debugNotificationStatus { delivered, authorization in
-                respond(Self.json(200, ["authorization": authorization, "delivered": delivered]))
+                respond(Self.json(200, ["authorization": authorization,
+                                        "delivered": delivered.map(\.asJSON)]))
             }
         default:
             respond(Self.json(404, ["error": "not found"]))

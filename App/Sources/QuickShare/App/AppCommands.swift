@@ -27,7 +27,9 @@ private struct InertDefaultsRemoved: Commands {
 /// a sidebar. This app has none of those, so the Edit and View menus are
 /// pared down to only the commands that actually do something here.
 struct AppCommands: Commands {
-    @ObservedObject var model: AppModel
+    /// Plain, not `@ObservedObject`: under Observation a view re-evaluates
+    /// because it *read* a property, so no wrapper is needed to observe.
+    let model: AppModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {

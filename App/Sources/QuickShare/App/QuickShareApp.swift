@@ -4,7 +4,7 @@ import AppKit
 @main
 struct QuickShareApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var model = AppModel()
+    @State private var model = AppModel()
 
     var body: some Scene {
         // A single Window (not WindowGroup) so "Open" focuses the one window
@@ -19,7 +19,7 @@ struct QuickShareApp: App {
         // inherit.
         Window("QShare", id: "main-window") {
             RootView()
-                .environmentObject(model)
+                .environment(model)
                 // A single-column utility, genuinely user-resizable in both
                 // axes — with no height range at all (the previous state),
                 // `.windowResizability(.contentSize)` pins height to the
@@ -50,7 +50,7 @@ struct QuickShareApp: App {
 
         // Menu-bar presence: usable without the window in front.
         MenuBarExtra {
-            MenuBarView().environmentObject(model)
+            MenuBarView().environment(model)
         } label: {
             Image(systemName: model.menuBarSymbol)
         }
@@ -67,7 +67,7 @@ struct QuickShareApp: App {
         // relaunch kept restoring that broken size no matter what the
         // current layout code did. A fresh id has no saved frame to inherit.
         Window("Settings", id: "settings-panel") {
-            SettingsView().environmentObject(model)
+            SettingsView().environment(model)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)

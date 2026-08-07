@@ -72,45 +72,6 @@ private enum Art {
     }
 }
 
-/// Layer-backed view that draws once and animates properties.
-private class AnimatedArtView: NSView {
-    var tint: NSColor = .systemBlue { didSet { if tint != oldValue { rebuildAndRestart() } } }
-    private(set) var animating = false
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    override func layout() {
-        super.layout()
-        rebuildAndRestart()
-    }
-
-    func setAnimating(_ on: Bool) {
-        guard on != animating else { return }
-        animating = on
-        if on { addAnimations() } else { removeAnimations() }
-    }
-
-    private func rebuildAndRestart() {
-        layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
-        build()
-        if animating { addAnimations() }
-    }
-
-    /// Draw everything once. Subclasses override.
-    func build() {}
-    /// Attach property animations. Subclasses override.
-    func addAnimations() {}
-
-    func removeAnimations() {
-        layer?.sublayers?.forEach { $0.removeAllAnimations() }
-    }
-}
-
 // MARK: - Cascade
 
 /// Arc pairs launched from the centre one after another, growing outward and
@@ -131,10 +92,45 @@ private struct Cascade: NSViewRepresentable {
         view.setAnimating(isActive)
     }
 
-    final class ArtView: AnimatedArtView {
+    /// Layer-backed: draws once, then animates properties only.
+    ///
+    /// This was a subclass of a shared `AnimatedArtView` base when six styles
+    /// existed. With one style left, the base was a two-level hierarchy whose
+    /// `build()`/`addAnimations()` were empty methods relying on an override
+    /// convention the compiler cannot check. Folded back in.
+    final class ArtView: NSView {
         private var waves: [CALayer] = []
         private var source = CAShapeLayer()
         private var compact = false
+        private var animating = false
+
+        var tint: NSColor = .systemBlue {
+            didSet { if tint != oldValue { rebuildAndRestart() } }
+        }
+
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            layer?.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+        }
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func layout() {
+            super.layout()
+            rebuildAndRestart()
+        }
+
+        func setAnimating(_ on: Bool) {
+            guard on != animating else { return }
+            animating = on
+            if on { addAnimations() } else { removeAnimations() }
+        }
+
+        private func rebuildAndRestart() {
+            layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
+            build()
+            if animating { addAnimations() }
+        }
 
         private static let waveCount = 3
         private static let period: CFTimeInterval = 3.1
@@ -155,7 +151,7 @@ private struct Cascade: NSViewRepresentable {
         /// entirely just looks like it is missing.
         private static let compactResting: Float = 0.3
 
-        override func build() {
+        private func build() {
             let centre = CGPoint(x: bounds.midX, y: bounds.midY)
             let extent = min(bounds.width, bounds.height)
             compact = extent < Self.compactBelow
@@ -209,7 +205,7 @@ private struct Cascade: NSViewRepresentable {
             layer?.addSublayer(source)
         }
 
-        override func addAnimations() {
+        private func addAnimations() {
             compact ? addCompactAnimations() : addFullAnimations()
         }
 
@@ -292,8 +288,8 @@ private struct Cascade: NSViewRepresentable {
             source.add(flash, forKey: "emit")
         }
 
-        override func removeAnimations() {
-            super.removeAnimations()
+        private func removeAnimations() {
+            layer?.sublayers?.forEach { $0.removeAllAnimations() }
             source.opacity = 1
             waves.forEach { $0.opacity = compact ? 1 : 0 }
         }

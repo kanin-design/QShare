@@ -3,7 +3,7 @@ import SwiftUI
 /// Accept/decline prompt for an incoming transfer. Presented as a sheet from the
 /// app root, so it appears over either tab — an incoming request is never hidden.
 struct IncomingRequestSheet: View {
-    @EnvironmentObject private var model: AppModel
+    @Environment(AppModel.self) private var model
     let request: IncomingRequest
     /// True when we've accepted from a device using this name before.
     let isKnown: Bool
@@ -52,8 +52,7 @@ struct IncomingRequestSheet: View {
                     .buttonStyle(.glass)
                     .controlSize(.large)
                     .keyboardShortcut(.cancelAction)
-                    .tint(Theme.orange)
-                    .foregroundStyle(Theme.orange)
+                    .orangeAccent()
 
                 // Deliberately NOT `.defaultAction`: this sheet appears
                 // unprompted and activates the app, so binding Accept to Return

@@ -74,6 +74,14 @@ enum Theme {
         dark: NSColor(srgbRed: 0.09, green: 0.16, blue: 0.30, alpha: 0.18),
         light: NSColor(srgbRed: 0.65, green: 0.78, blue: 0.95, alpha: 0.14))
 
+    /// The wash a row or segment picks up under the pointer. One value, because
+    /// every hoverable surface should react identically — this had been typed
+    /// out as `Color.primary.opacity(0.06)` in three separate files.
+    static let hoverFill = Color.primary.opacity(0.06)
+
+    /// The recessed track a segmented control's pill slides in.
+    static let trackFill = Color.primary.opacity(0.05)
+
     /// Internal rules: the separator between rows in an `ElementList`, and the
     /// divider inside an expanded transfer. Deliberately not the same token as
     /// `cardBorder` below — one draws *inside* a surface, the other draws its
@@ -111,7 +119,6 @@ enum Theme {
         static let md: CGFloat = 10
         static let lg: CGFloat = 14
         static let xl: CGFloat = 20
-        static let xxl: CGFloat = 28
     }
 
     // MARK: Radius
@@ -153,35 +160,66 @@ enum Theme {
 }
 
 // MARK: - Typography
-// Every style here, and every one-off spot elsewhere that needs to "match"
-// one of them (PinBadge, badge numbers, the transfer percentage), reads its
-// color from the Theme.text* tokens above — never a hand-copied value.
 
-// Type scale (SF Pro): 13 / 12 / 11 / 10, big → small.
+extension Theme {
+    /// The type scale — size and weight only, no colour.
+    ///
+    /// Kept separate from the `*Style()` helpers below because those bind a
+    /// size to a colour, and anything needing the same size in a *different*
+    /// colour used to bypass them and re-type the number. Five sites had done
+    /// exactly that, so the "single source" wasn't one: changing the scale
+    /// moved four styles and left the rest behind.
+    enum Font {
+        /// Group header — most prominent.
+        static let section = SwiftUI.Font.system(size: 13, weight: .semibold)
+        /// Card headline.
+        static let card = SwiftUI.Font.system(size: 12, weight: .semibold)
+        /// Body content.
+        static let body = SwiftUI.Font.system(size: 11, weight: .regular)
+        /// Muted subtext.
+        static let caption = SwiftUI.Font.system(size: 10, weight: .regular)
+        /// Window title on the traffic-light row.
+        static let windowHeader = SwiftUI.Font.system(size: 12, weight: .light)
+        /// Small glyph accents — chevrons, badge arrows, direction marks.
+        static let glyph = SwiftUI.Font.system(size: 9, weight: .semibold)
+    }
+}
+
+// Each helper pairs a scale entry with its colour. Where you need one of these
+// sizes in another colour, use `Theme.Font.*` directly rather than re-typing it.
 extension View {
-    /// Group header — most prominent. Used only via `SectionHeader`.
-    /// Hierarchy comes from size/weight, not color — section, card, and body
-    /// text all share the same plain text color on purpose.
+    /// Group header. Hierarchy comes from size/weight, not colour — section,
+    /// card and body text share the same plain text colour on purpose.
     func sectionStyle() -> some View {
-        font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.textProminent)
+        font(Theme.Font.section).foregroundStyle(Theme.textProminent)
     }
-    /// Card headline.
     func cardTitle() -> some View {
-        font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.textProminent)
+        font(Theme.Font.card).foregroundStyle(Theme.textProminent)
     }
-    /// Body content.
     func primaryStyle() -> some View {
-        font(.system(size: 11, weight: .regular)).foregroundStyle(Theme.textProminent)
+        font(Theme.Font.body).foregroundStyle(Theme.textProminent)
     }
-    /// Muted subtext.
     func secondaryStyle() -> some View {
-        font(.system(size: 10, weight: .regular)).foregroundStyle(Theme.textMuted)
+        font(Theme.Font.caption).foregroundStyle(Theme.textMuted)
     }
     /// Window title sitting on the traffic-light row ("QShare", "Settings").
-    /// Was hand-typed identically in RootView and SettingsView — pulled out
-    /// once it turned out to be the exact same style defined twice.
     func windowHeaderStyle() -> some View {
-        font(.system(size: 12, weight: .light)).foregroundStyle(Theme.textWindowHeader)
+        font(Theme.Font.windowHeader).foregroundStyle(Theme.textWindowHeader)
+    }
+}
+
+// MARK: - Button recipes
+
+extension View {
+    /// A borderless button in the app's warm accent.
+    ///
+    /// Both modifiers are needed, and that is the point of having this in one
+    /// place: `.tint` alone only recolours a bordered button's label in dark
+    /// appearance — light mode keeps it black regardless — so the label colour
+    /// has to be set directly too. That two-line workaround, and the paragraph
+    /// explaining it, had been copied into three files.
+    func orangeAccent() -> some View {
+        tint(Theme.orange).foregroundStyle(Theme.orange)
     }
 }
 
@@ -307,6 +345,11 @@ struct ScrollerHider: NSViewRepresentable {
 
         func apply() {
             guard let sv = enclosingScrollView else { return }
+            // Idempotent: `layout()` runs constantly, and re-assigning these
+            // every pass makes AppKit do teardown/setup work for no change.
+            // Only touch the scroll view when it has actually drifted back.
+            guard sv.hasVerticalScroller || sv.hasHorizontalScroller
+                    || sv.drawsBackground || !sv.autohidesScrollers else { return }
             sv.scrollerStyle = .overlay
             sv.autohidesScrollers = true
             sv.hasVerticalScroller = false

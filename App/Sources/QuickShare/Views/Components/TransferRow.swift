@@ -26,7 +26,7 @@ struct TransferRow: View {
         .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
-                .fill(hovering ? Color.primary.opacity(0.06) : Color.clear)
+                .fill(hovering ? Theme.hoverFill : Color.clear)
         )
         .onHover { hovering = $0 }
     }
@@ -101,12 +101,12 @@ struct TransferRow: View {
                     .opacity(hovering ? 0 : 1)
                 if isExpandable {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                        .font(Theme.Font.glyph).foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                         .opacity(hovering ? 1 : 0)
                 } else if transfer.revealURL != nil {
                     Image(systemName: "arrow.up.forward")
-                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                        .font(Theme.Font.glyph).foregroundStyle(.tertiary)
                         .opacity(hovering ? 1 : 0)
                 }
             }
@@ -129,10 +129,10 @@ struct TransferRow: View {
                 } label: {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: icon(for: file))
-                            .font(.system(size: 10))
+                            .font(Theme.Font.caption)
                             .foregroundStyle(.secondary)
                             .frame(width: 14)
-                        Text(file.name).font(.system(size: 10)).lineLimit(1)
+                        Text(file.name).font(Theme.Font.caption).lineLimit(1)
                             .foregroundStyle(file.url == nil ? .secondary : .primary)
                         Spacer()
                         if file.url != nil {

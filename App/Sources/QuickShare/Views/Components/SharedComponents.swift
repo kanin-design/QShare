@@ -264,7 +264,7 @@ struct ActionElement<Trailing: View>: View {
         .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
-                .fill(tint ?? (hovering ? Color.primary.opacity(0.06) : Color.clear))
+                .fill(tint ?? (hovering ? Theme.hoverFill : Color.clear))
         )
         .onHover { hovering = $0 }
     }
