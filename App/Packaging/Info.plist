@@ -2,43 +2,39 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>QShare</string>
-    <key>CFBundleDisplayName</key>
-    <string>QShare</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.stian.qshare</string>
-    <key>CFBundleExecutable</key>
-    <string>QShare</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleIconName</key>
-    <string>AppIcon</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.1</string>
-    <!-- Stamped by Packaging/build-app.sh; shown in Build Info (⌘⌥I). -->
-    <key>CFBundleVersion</key>
-    <string>__BUILD__</string>
-    <key>QSGitCommit</key>
-    <string>__COMMIT__</string>
-    <key>QSBuildDate</key>
-    <string>__DATE__</string>
-    <key>QSReleaseStage</key>
-    <string>alpha</string>
-    <!-- Must match Package.swift's .macOS("26.0"): the UI uses glassEffect. -->
-    <key>LSMinimumSystemVersion</key>
-    <string>26.0</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-
-    <!-- Quick Share transfers happen over the local network via Bonjour/mDNS. -->
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>QShare uses the local network to find and transfer files with nearby Android devices.</string>
-    <key>NSBonjourServices</key>
-    <array>
-        <string>_FC9F5ED42C8A._tcp</string>
-    </array>
+	<key>CFBundleDisplayName</key>
+	<string>QShare</string>
+	<key>CFBundleExecutable</key>
+	<string>QShare</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.stian.qshare</string>
+	<key>CFBundleName</key>
+	<string>QShare</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.0</string>
+	<key>CFBundleVersion</key>
+	<string>__BUILD__</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_FC9F5ED42C8A._tcp</string>
+	</array>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>QShare uses the local network to find and transfer files with nearby Android devices.</string>
+	<key>QSBuildDate</key>
+	<string>__DATE__</string>
+	<key>QSGitCommit</key>
+	<string>__COMMIT__</string>
+	<key>QSReleaseStage</key>
+	<string>alpha</string>
 </dict>
 </plist>
